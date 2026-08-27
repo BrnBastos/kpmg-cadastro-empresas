@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 
 # os .env de verdade ficam de fora, os .example entram no repo.
 # o glob precisa do env* pra pegar tambem o .env.test.example
