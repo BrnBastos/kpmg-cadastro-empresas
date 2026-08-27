@@ -1,0 +1,36 @@
+services:
+  # postgres da aplicacao. o init.sql cria tambem o banco de testes,
+  # assim a suite e2e nunca encosta nos dados de desenvolvimento.
+  db:
+    image: postgres:18-alpine
+    container_name: kpmg-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kpmg
+      POSTGRES_PASSWORD: kpmg
+      POSTGRES_DB: kpmg
+    ports:
+      - "5432:5432"
+    volumes:
+      # no postgres 18 o volume vai na raiz, e nao mais em /data como nas versoes antigas
+      - db-data:/var/lib/postgresql
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      # o backend so sobe depois que o banco aceita conexao de verdade
+      test: ["CMD-SHELL", "pg_isready -U kpmg -d kpmg"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # servidor smtp de mentira: captura tudo que a aplicacao envia e mostra
+  # numa caixa de entrada web em http://localhost:8025
+  mail:
+    image: axllent/mailpit:v1.28
+    container_name: kpmg-mail
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  db-data:
