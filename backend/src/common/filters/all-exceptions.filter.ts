@@ -9,15 +9,6 @@ import {
 import type { Request, Response } from 'express';
 import type { ApiErrorBody } from '../http/api-error.js';
 
-// nomes de status em pt-br pro campo "error", que e o rotulo curto do problema
-const STATUS_LABELS: Record<number, string> = {
-  [HttpStatus.BAD_REQUEST]: 'Requisicao invalida',
-  [HttpStatus.NOT_FOUND]: 'Nao encontrado',
-  [HttpStatus.CONFLICT]: 'Conflito',
-  [HttpStatus.UNPROCESSABLE_ENTITY]: 'Nao processavel',
-  [HttpStatus.INTERNAL_SERVER_ERROR]: 'Erro interno',
-};
-
 interface NestExceptionShape {
   message?: string | string[];
   fields?: Record<string, string>;
@@ -88,7 +79,19 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
   }
 
+  // "error" e o rotulo tecnico do status, entao fica em ingles como manda o http.
+  // o texto que a pessoa le e o "message", esse sim em pt-br.
   private labelFor(statusCode: number): string {
-    return STATUS_LABELS[statusCode] ?? 'Erro';
+    const name = HttpStatus[statusCode] as string | undefined;
+
+    if (!name) {
+      return 'Error';
+    }
+
+    return name
+      .toLowerCase()
+      .split('_')
+      .map((word) => word[0].toUpperCase() + word.slice(1))
+      .join(' ');
   }
 }
