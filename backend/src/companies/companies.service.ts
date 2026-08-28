@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { ApiException } from '../common/http/api-error.js';
 import { formatCnpj } from '../common/validation/cnpj.js';
 import { Prisma, type Company } from '../generated/prisma/client.js';
+import { MailService } from '../mail/mail.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateCompanyDto } from './dto/create-company.dto.js';
 import type { UpdateCompanyDto } from './dto/update-company.dto.js';
@@ -12,14 +13,25 @@ const RECORD_NOT_FOUND = 'P2025';
 
 @Injectable()
 export class CompaniesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mail: MailService,
+  ) {}
 
   async create(dto: CreateCompanyDto): Promise<Company> {
+    let company: Company;
+
     try {
-      return await this.prisma.company.create({ data: dto });
+      company = await this.prisma.company.create({ data: dto });
     } catch (error) {
       throw this.translatePrismaError(error, dto.cnpj);
     }
+
+    // chamada direta em vez de evento: e um unico interessado no cadastro, e o
+    // MailService ja engole a propria falha, entao nada daqui derruba o 201.
+    await this.mail.sendCompanyCreated(company);
+
+    return company;
   }
 
   findAll(): Promise<Company[]> {
