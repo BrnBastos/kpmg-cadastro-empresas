@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ApiException } from '../common/http/api-error.js';
 import { formatCnpj } from '../common/validation/cnpj.js';
 import { Prisma, type Company } from '../generated/prisma/client.js';
@@ -13,6 +13,8 @@ const RECORD_NOT_FOUND = 'P2025';
 
 @Injectable()
 export class CompaniesService {
+  private readonly logger = new Logger(CompaniesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly mail: MailService,
@@ -27,11 +29,23 @@ export class CompaniesService {
       throw this.translatePrismaError(error, dto.cnpj);
     }
 
-    // chamada direta em vez de evento: e um unico interessado no cadastro, e o
-    // MailService ja engole a propria falha, entao nada daqui derruba o 201.
-    await this.mail.sendCompanyCreated(company);
+    await this.notifyCreation(company);
 
     return company;
+  }
+
+  // o aviso e efeito colateral do cadastro: a empresa ja esta gravada, entao uma
+  // falha no smtp vira log e nao muda a resposta. chamada direta em vez de evento
+  // porque ha um unico interessado, e um barramento so esconderia o fluxo.
+  private async notifyCreation(company: Company): Promise<void> {
+    try {
+      await this.mail.sendCompanyCreated(company);
+    } catch (error) {
+      this.logger.error(
+        `Empresa ${company.id} cadastrada, mas o aviso por e-mail falhou`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   findAll(): Promise<Company[]> {

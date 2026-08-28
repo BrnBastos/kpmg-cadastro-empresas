@@ -39,28 +39,22 @@ export class MailService {
     });
   }
 
-  // o cadastro nao pode falhar porque o smtp caiu: a empresa ja esta gravada e o
-  // aviso e um efeito colateral. entao o erro para aqui e vira log.
+  // envia e deixa o erro subir. quem decide que uma falha de e-mail nao invalida
+  // o cadastro e o CompaniesService, porque essa e uma regra do cadastro e nao
+  // do envio.
   async sendCompanyCreated(company: Company): Promise<void> {
     const message = buildCompanyCreatedMessage(company);
 
-    try {
-      await this.transporter.sendMail({
-        from: this.from,
-        to: this.recipients,
-        subject: message.subject,
-        text: message.text,
-        html: message.html,
-      });
+    await this.transporter.sendMail({
+      from: this.from,
+      to: this.recipients,
+      subject: message.subject,
+      text: message.text,
+      html: message.html,
+    });
 
-      this.logger.log(
-        `Aviso de cadastro enviado para ${this.recipients.join(', ')} (empresa ${company.id})`,
-      );
-    } catch (error) {
-      this.logger.error(
-        `Falha ao enviar o aviso de cadastro da empresa ${company.id}`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    }
+    this.logger.log(
+      `Aviso de cadastro enviado para ${this.recipients.join(', ')} (empresa ${company.id})`,
+    );
   }
 }
