@@ -1,0 +1,24 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id String @id @default(uuid())
+
+  name      String
+  // guardamos so os 14 digitos, sem mascara. o unique aqui e o que garante
+  // que nao entra cnpj repetido, mesmo com dois cadastros ao mesmo tempo
+  cnpj      String @unique
+  tradeName String @map("trade_name")
+  address   String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("companies")
+}
