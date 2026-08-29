@@ -6,6 +6,7 @@ import { ApiError } from '../api/client';
 import type { Company } from '../api/types';
 import { Alert } from '../components/Alert';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { TrashIcon } from '../components/icons';
 import { formatCnpj } from '../lib/cnpj';
 import { formatDate, formatTime } from '../lib/date';
 
@@ -166,13 +167,14 @@ export function CompanyListPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn--ghost"
+                          className="btn btn--ghost btn--ghost-danger"
                           onClick={(event) =>
                             askToRemove(company, event.currentTarget)
                           }
                         >
                           Excluir
                           <span className="sr-only"> {company.name}</span>
+                          <TrashIcon />
                         </button>
                       </div>
                     </td>

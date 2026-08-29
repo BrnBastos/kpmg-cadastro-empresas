@@ -173,6 +173,17 @@ p {
   color: var(--azul);
 }
 
+/* acao destrutiva avisa pela cor antes do clique, e nao so no dialogo */
+.btn--ghost-danger:hover:not(:disabled) {
+  background: var(--erro-fundo);
+  color: var(--erro);
+}
+
+/* icone e texto juntos precisam de menos respiro que dois textos */
+.btn--ghost {
+  gap: 6px;
+}
+
 /* ---------- tabela ---------- */
 
 .table-wrap {
