@@ -3,7 +3,6 @@ services:
   # nos dados de desenvolvimento.
   db:
     image: postgres:18-alpine
-    container_name: kpmg-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: kpmg
@@ -28,7 +27,6 @@ services:
   # numa caixa de entrada em http://localhost:8025.
   mail:
     image: axllent/mailpit:v1.28
-    container_name: kpmg-mail
     restart: unless-stopped
     ports:
       - "1025:1025"
