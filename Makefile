@@ -13,7 +13,7 @@ setup: up
 	@cp -n frontend/.env.example frontend/.env 2>/dev/null || true
 	$(BACKEND) install
 	$(FRONTEND) install
-	$(BACKEND) exec -- prisma migrate deploy
+	$(BACKEND) run migrate:deploy
 	@echo "Pronto. Use 'make dev-api' e 'make dev-web' em dois terminais."
 
 ## PostgreSQL e Mailpit. O --wait segura até o healthcheck do banco passar.
