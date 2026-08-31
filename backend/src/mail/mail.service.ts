@@ -5,7 +5,6 @@ import type { Env } from '../config/env.js';
 import type { Company } from '../generated/prisma/client.js';
 import { buildCompanyCreatedMessage } from './company-created.template.js';
 
-// teto pra cada etapa da conversa com o servidor smtp
 const SMTP_TIMEOUT_MS = 5_000;
 
 @Injectable()
@@ -23,11 +22,10 @@ export class MailService {
       host: this.config.get('MAIL_HOST', { infer: true }),
       port: this.config.get('MAIL_PORT', { infer: true }),
       secure: this.config.get('MAIL_SECURE', { infer: true }),
-      // o mailpit aceita conexao sem login. so manda auth quando tem credencial,
-      // senao ele recusa o handshake.
+      // O Mailpit recusa o handshake se receber autenticação sem esperá-la.
       ...(user ? { auth: { user, pass: password } } : {}),
-      // sem limite explicito o nodemailer fica minutos tentando quando o smtp
-      // esta fora, e o cadastro que disparou o aviso ficaria esperando junto
+      // Sem limite explícito o nodemailer passa minutos tentando alcançar um
+      // servidor fora do ar, e o cadastro que disparou o aviso espera junto.
       connectionTimeout: SMTP_TIMEOUT_MS,
       greetingTimeout: SMTP_TIMEOUT_MS,
       socketTimeout: SMTP_TIMEOUT_MS,
@@ -39,9 +37,8 @@ export class MailService {
     });
   }
 
-  // envia e deixa o erro subir. quem decide que uma falha de e-mail nao invalida
-  // o cadastro e o CompaniesService, porque essa e uma regra do cadastro e nao
-  // do envio.
+  // Deixa o erro subir. Quem decide que uma falha de envio não invalida o
+  // cadastro é o CompaniesService, porque essa é uma regra do cadastro.
   async sendCompanyCreated(company: Company): Promise<void> {
     const message = buildCompanyCreatedMessage(company);
 

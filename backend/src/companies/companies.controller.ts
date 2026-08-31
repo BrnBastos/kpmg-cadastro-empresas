@@ -20,7 +20,10 @@ import {
 import { CompaniesService } from './companies.service.js';
 import { CreateCompanyDto } from './dto/create-company.dto.js';
 import { UpdateCompanyDto } from './dto/update-company.dto.js';
-import { CompanyEntity } from './entities/company.entity.js';
+import {
+  CompanyCreatedEntity,
+  CompanyEntity,
+} from './entities/company.entity.js';
 
 @ApiTags('Empresas')
 @Controller('companies')
@@ -30,10 +33,15 @@ export class CompaniesController {
   @Post()
   @ApiOperation({
     summary: 'Cadastra uma empresa e avisa o grupo por e-mail',
+    description:
+      'O aviso é enviado de forma síncrona e best-effort. Se o SMTP falhar, a ' +
+      'empresa continua cadastrada e a resposta traz notificationSent: false.',
   })
-  @ApiCreatedResponse({ type: CompanyEntity })
-  create(@Body() dto: CreateCompanyDto): Promise<CompanyEntity> {
-    return this.companies.create(dto);
+  @ApiCreatedResponse({ type: CompanyCreatedEntity })
+  async create(@Body() dto: CreateCompanyDto): Promise<CompanyCreatedEntity> {
+    const { company, notificationSent } = await this.companies.create(dto);
+
+    return { ...company, notificationSent };
   }
 
   @Get()
@@ -51,7 +59,11 @@ export class CompaniesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Atualiza os dados de uma empresa' })
+  @ApiOperation({
+    summary: 'Atualiza os dados de uma empresa',
+    description:
+      'Aceita apenas os campos que mudaram. Um corpo vazio é recusado com 400.',
+  })
   @ApiOkResponse({ type: CompanyEntity })
   update(
     @Param('id', ParseUUIDPipe) id: string,

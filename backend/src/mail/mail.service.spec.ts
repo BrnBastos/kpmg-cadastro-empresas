@@ -4,10 +4,10 @@ import type { Company } from '../generated/prisma/client.js';
 import { MailService } from './mail.service.js';
 
 const sendMail = vi.fn();
-const createTransport = vi.fn(() => ({ sendMail }));
+const createTransport = vi.fn((_options: unknown) => ({ sendMail }));
 
 vi.mock('nodemailer', () => ({
-  createTransport: (...args: unknown[]) => createTransport(...args),
+  createTransport: (options: unknown) => createTransport(options),
 }));
 
 const ENV: Record<string, unknown> = {
@@ -16,19 +16,19 @@ const ENV: Record<string, unknown> = {
   MAIL_SECURE: false,
   MAIL_USER: '',
   MAIL_PASSWORD: '',
-  MAIL_FROM: 'Cadastro <nao-responda@kpmg-teste.local>',
+  MAIL_FROM: 'Cadastro <nao-responda@brunotransportes.local>',
   MAIL_NOTIFICATION_RECIPIENTS: [
-    'cadastro@kpmg-teste.local',
-    'financeiro@kpmg-teste.local',
+    'cadastro@brunotransportes.local',
+    'financeiro@brunotransportes.local',
   ],
 };
 
 const company: Company = {
   id: '3f1c2b9a-4d7e-4a52-9c0b-8e1d6f2a7b34',
-  name: 'Padaria Bom Dia LTDA',
+  name: 'Bruno Transportes LTDA',
   cnpj: '11222333000181',
-  tradeName: 'Padaria Bom Dia',
-  address: 'Rua das Flores, 123 - Centro',
+  tradeName: 'Bruno Transportes',
+  address: 'Rod. Anhanguera, km 78 - Campinas/SP',
   createdAt: new Date('2026-08-28T15:00:00.000Z'),
   updatedAt: new Date('2026-08-28T15:00:00.000Z'),
 };
@@ -60,9 +60,9 @@ describe('MailService', () => {
     expect(sendMail).toHaveBeenCalledTimes(1);
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({
-        from: 'Cadastro <nao-responda@kpmg-teste.local>',
-        to: ['cadastro@kpmg-teste.local', 'financeiro@kpmg-teste.local'],
-        subject: 'Nova empresa cadastrada: Padaria Bom Dia LTDA',
+        from: 'Cadastro <nao-responda@brunotransportes.local>',
+        to: ['cadastro@brunotransportes.local', 'financeiro@brunotransportes.local'],
+        subject: 'Nova empresa cadastrada: Bruno Transportes LTDA',
       }),
     );
   });
@@ -76,12 +76,12 @@ describe('MailService', () => {
       { text: string; html: string },
     ];
 
-    expect(text).toContain('Padaria Bom Dia LTDA');
+    expect(text).toContain('Bruno Transportes LTDA');
     expect(text).toContain('11.222.333/0001-81');
     expect(html).toContain('11.222.333/0001-81');
   });
 
-  // o mailpit recusa o handshake se receber auth sem ter credencial configurada
+  // O Mailpit recusa o handshake se receber autenticação sem esperá-la.
   it('so manda autenticacao quando ha usuario configurado', async () => {
     await buildService();
     expect(createTransport).toHaveBeenCalledWith(
@@ -108,7 +108,7 @@ describe('MailService', () => {
     );
   });
 
-  // quem decide que isso nao invalida o cadastro e o CompaniesService
+  // Quem decide que isto não invalida o cadastro é o CompaniesService.
   it('propaga a falha de envio', async () => {
     const service = await buildService();
     sendMail.mockRejectedValue(new Error('smtp fora do ar'));
