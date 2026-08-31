@@ -4,10 +4,10 @@ import { buildCompanyCreatedMessage } from './company-created.template.js';
 function companyFixture(overrides: Partial<Company> = {}): Company {
   return {
     id: '3f1c2b9a-4d7e-4a52-9c0b-8e1d6f2a7b34',
-    name: 'Padaria Bom Dia LTDA',
+    name: 'Bruno Transportes LTDA',
     cnpj: '11222333000181',
-    tradeName: 'Padaria Bom Dia',
-    address: 'Rua das Flores, 123 - Centro',
+    tradeName: 'Bruno Transportes',
+    address: 'Rod. Anhanguera, km 78 - Campinas/SP',
     createdAt: new Date('2026-08-28T15:00:00.000Z'),
     updatedAt: new Date('2026-08-28T15:00:00.000Z'),
     ...overrides,
@@ -19,7 +19,7 @@ describe('buildCompanyCreatedMessage', () => {
     const message = buildCompanyCreatedMessage(companyFixture());
 
     expect(message.subject).toBe(
-      'Nova empresa cadastrada: Padaria Bom Dia LTDA',
+      'Nova empresa cadastrada: Bruno Transportes LTDA',
     );
   });
 
@@ -35,16 +35,15 @@ describe('buildCompanyCreatedMessage', () => {
     const message = buildCompanyCreatedMessage(companyFixture());
 
     for (const value of [
-      'Padaria Bom Dia LTDA',
-      'Padaria Bom Dia',
-      'Rua das Flores, 123 - Centro',
+      'Bruno Transportes LTDA',
+      'Bruno Transportes',
+      'Rod. Anhanguera, km 78 - Campinas/SP',
     ]) {
       expect(message.text).toContain(value);
       expect(message.html).toContain(value);
     }
   });
 
-  // o nome vem de um campo aberto, entao nao pode virar tag dentro do e-mail
   it('escapa html vindo do cadastro', () => {
     const message = buildCompanyCreatedMessage(
       companyFixture({ name: '<script>alert(1)</script> LTDA' }),

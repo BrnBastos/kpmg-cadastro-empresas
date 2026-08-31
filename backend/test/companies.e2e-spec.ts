@@ -1,27 +1,28 @@
 import { type INestApplication, Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import type { App } from 'supertest/types';
 import { AppModule } from '../src/app.module.js';
 import { MailService } from '../src/mail/mail.service.js';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { setupApp } from '../src/setup-app.js';
 
-// dois cnpjs validos de verdade, com os digitos verificadores corretos
-const CNPJ = '11.222.333/0001-81';
-const CNPJ_DIGITS = '11222333000181';
-const OTHER_CNPJ = '11.444.777/0001-61';
-const OTHER_CNPJ_DIGITS = '11444777000161';
+const CNPJ_MASKED = '11.222.333/0001-81';
+const CNPJ = '11222333000181';
+const OTHER_CNPJ_MASKED = '11.444.777/0001-61';
+const OTHER_CNPJ = '11444777000161';
+// Primeiro CNPJ alfanumérico divulgado pela Receita Federal.
+const ALPHANUMERIC_MASKED = '00.000.000/E08G-12';
+const ALPHANUMERIC = '00000000E08G12';
 
 const payload = {
-  name: 'Padaria Bom Dia LTDA',
-  cnpj: CNPJ,
-  tradeName: 'Padaria Bom Dia',
-  address: 'Rua das Flores, 123 - Centro',
+  name: 'Bruno Transportes LTDA',
+  cnpj: CNPJ_MASKED,
+  tradeName: 'Bruno Transportes',
+  address: 'Rod. Anhanguera, km 78 - Campinas/SP',
 };
 
 describe('Empresas (e2e)', () => {
-  let app: INestApplication<App>;
+  let app: INestApplication;
   let prisma: PrismaService;
   const sendCompanyCreated = vi.fn();
 
@@ -29,7 +30,8 @@ describe('Empresas (e2e)', () => {
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
-      // o e2e valida a api, nao o smtp. o envio em si tem teste proprio.
+      // O e2e cobre a integração HTTP + Nest + PostgreSQL. O comportamento do
+      // Nodemailer é verificado nos testes unitários de MailService.
       .overrideProvider(MailService)
       .useValue({ sendCompanyCreated })
       .compile();
@@ -39,8 +41,8 @@ describe('Empresas (e2e)', () => {
     await app.init();
   });
 
-  // limpa antes de cada caso, e nao depois: se um teste quebra no meio, o
-  // proximo ainda comeca com a tabela vazia.
+  // Limpa antes de cada caso: um teste que quebra no meio ainda deixa a tabela
+  // vazia para o próximo.
   beforeEach(async () => {
     await prisma.$executeRawUnsafe('TRUNCATE TABLE companies');
     sendCompanyCreated.mockReset();
@@ -59,7 +61,9 @@ describe('Empresas (e2e)', () => {
       .send({ ...payload, ...overrides })
       .expect(201);
 
-    return response.body as { id: string; [key: string]: unknown };
+    return response.body as Record<string, string> & {
+      notificationSent: boolean;
+    };
   }
 
   describe('POST /companies', () => {
@@ -70,35 +74,43 @@ describe('Empresas (e2e)', () => {
         name: payload.name,
         tradeName: payload.tradeName,
         address: payload.address,
-        // entrou com mascara, e guardado so com digitos
-        cnpj: CNPJ_DIGITS,
+        cnpj: CNPJ,
+        notificationSent: true,
       });
       expect(response.body.id).toEqual(expect.any(String));
-      expect(response.body.createdAt).toEqual(expect.any(String));
-      expect(response.body.updatedAt).toEqual(expect.any(String));
     });
 
-    it('grava de fato no banco', async () => {
+    it('guarda a forma canônica do CNPJ, sem a máscara enviada', async () => {
       const created = await createCompany();
-
       const stored = await prisma.company.findUnique({
         where: { id: created.id },
       });
 
-      expect(stored?.cnpj).toBe(CNPJ_DIGITS);
+      expect(stored?.cnpj).toBe(CNPJ);
     });
 
-    it('dispara o aviso por e-mail uma unica vez, com a empresa gravada', async () => {
+    it('aceita CNPJ alfanumérico', async () => {
+      const created = await createCompany({ cnpj: ALPHANUMERIC_MASKED });
+
+      expect(created.cnpj).toBe(ALPHANUMERIC);
+    });
+
+    it('normaliza CNPJ alfanumérico em minúsculas', async () => {
+      const created = await createCompany({ cnpj: '00.000.000/e08g-12' });
+
+      expect(created.cnpj).toBe(ALPHANUMERIC);
+    });
+
+    it('dispara o aviso uma única vez, com a empresa gravada', async () => {
       const created = await createCompany();
 
       expect(sendCompanyCreated).toHaveBeenCalledTimes(1);
       expect(sendCompanyCreated).toHaveBeenCalledWith(
-        expect.objectContaining({ id: created.id, cnpj: CNPJ_DIGITS }),
+        expect.objectContaining({ id: created.id, cnpj: CNPJ }),
       );
     });
 
-    it('responde 201 mesmo se o envio do e-mail falhar', async () => {
-      // a falha aqui e proposital, entao o log dela nao precisa sujar a saida
+    it('cadastra e informa notificationSent: false quando o envio falha', async () => {
       const logged = vi
         .spyOn(Logger.prototype, 'error')
         .mockImplementation(() => {});
@@ -106,17 +118,18 @@ describe('Empresas (e2e)', () => {
 
       const response = await http().post('/companies').send(payload).expect(201);
 
+      expect(response.body.notificationSent).toBe(false);
       expect(logged).toHaveBeenCalledOnce();
-      logged.mockRestore();
 
-      // e a empresa continua gravada
       const stored = await prisma.company.findUnique({
         where: { id: response.body.id },
       });
       expect(stored).not.toBeNull();
+
+      logged.mockRestore();
     });
 
-    it('recusa cnpj com digito verificador errado', async () => {
+    it('recusa CNPJ com dígito verificador errado', async () => {
       const response = await http()
         .post('/companies')
         .send({ ...payload, cnpj: '11.222.333/0001-99' })
@@ -126,7 +139,25 @@ describe('Empresas (e2e)', () => {
       expect(sendCompanyCreated).not.toHaveBeenCalled();
     });
 
-    it('recusa campos obrigatorios vazios, apontando cada um', async () => {
+    // Antes de aceitar letras, a limpeza com \D transformava esta entrada no
+    // CNPJ válido 11222333000181.
+    it('recusa texto inserido no meio do CNPJ', async () => {
+      await http()
+        .post('/companies')
+        .send({ ...payload, cnpj: '11abc222.333/0001-81' })
+        .expect(400);
+
+      expect(await prisma.company.count()).toBe(0);
+    });
+
+    it('recusa caractere não permitido no CNPJ', async () => {
+      await http()
+        .post('/companies')
+        .send({ ...payload, cnpj: '11!222333000181' })
+        .expect(400);
+    });
+
+    it('recusa campos obrigatórios vazios, apontando cada um', async () => {
       const response = await http()
         .post('/companies')
         .send({ name: '', cnpj: '', tradeName: '', address: '' })
@@ -137,14 +168,14 @@ describe('Empresas (e2e)', () => {
       );
     });
 
-    it('recusa campo que nao existe no cadastro', async () => {
+    it('recusa campo que não existe no cadastro', async () => {
       await http()
         .post('/companies')
         .send({ ...payload, salario: 1000 })
         .expect(400);
     });
 
-    it('recusa cnpj repetido e aponta o campo', async () => {
+    it('recusa CNPJ repetido e aponta o campo', async () => {
       await createCompany();
 
       const response = await http().post('/companies').send(payload).expect(409);
@@ -155,7 +186,26 @@ describe('Empresas (e2e)', () => {
       });
     });
 
-    it('nao envia e-mail quando o cadastro e recusado', async () => {
+    // A unicidade vale sobre a forma canônica, e não sobre o texto recebido.
+    it('recusa o mesmo CNPJ enviado com e sem máscara', async () => {
+      await createCompany({ cnpj: CNPJ_MASKED });
+
+      await http()
+        .post('/companies')
+        .send({ ...payload, cnpj: CNPJ })
+        .expect(409);
+    });
+
+    it('recusa o mesmo CNPJ alfanumérico em caixas diferentes', async () => {
+      await createCompany({ cnpj: ALPHANUMERIC_MASKED });
+
+      await http()
+        .post('/companies')
+        .send({ ...payload, cnpj: '00000000e08g12' })
+        .expect(409);
+    });
+
+    it('não envia e-mail quando o cadastro é recusado', async () => {
       await createCompany();
       sendCompanyCreated.mockClear();
 
@@ -166,18 +216,26 @@ describe('Empresas (e2e)', () => {
   });
 
   describe('GET /companies', () => {
-    it('devolve lista vazia quando nao ha cadastro', async () => {
+    it('devolve lista vazia quando não há cadastro', async () => {
       await http().get('/companies').expect(200).expect([]);
     });
 
-    it('lista da mais recente para a mais antiga', async () => {
+    it('devolve as empresas ordenadas da mais recente para a mais antiga', async () => {
       await createCompany();
-      await createCompany({ cnpj: OTHER_CNPJ, name: 'Mercado Central LTDA' });
+      await createCompany({ cnpj: OTHER_CNPJ_MASKED, name: 'Bastos Logística LTDA' });
 
       const response = await http().get('/companies').expect(200);
+      const criacoes = (response.body as Array<{ createdAt: string }>).map(
+        (company) => new Date(company.createdAt).getTime(),
+      );
 
       expect(response.body).toHaveLength(2);
-      expect(response.body[0].cnpj).toBe(OTHER_CNPJ_DIGITS);
+      // Duas inserções seguidas podem cair no mesmo milissegundo, então o que
+      // se verifica é a ordenação, não qual das duas ficou em primeiro.
+      expect(criacoes).toEqual([...criacoes].sort((a, b) => b - a));
+      expect(
+        (response.body as Array<{ cnpj: string }>).map((c) => c.cnpj).sort(),
+      ).toEqual([CNPJ, OTHER_CNPJ].sort());
     });
   });
 
@@ -185,43 +243,73 @@ describe('Empresas (e2e)', () => {
     it('devolve a empresa pelo id', async () => {
       const created = await createCompany();
 
-      const response = await http()
-        .get(`/companies/${created.id}`)
-        .expect(200);
+      const response = await http().get(`/companies/${created.id}`).expect(200);
 
       expect(response.body.id).toBe(created.id);
     });
 
-    it('da 404 para id inexistente', async () => {
+    it('não expõe notificationSent fora do cadastro', async () => {
+      const created = await createCompany();
+
+      const response = await http().get(`/companies/${created.id}`).expect(200);
+
+      expect(response.body).not.toHaveProperty('notificationSent');
+    });
+
+    it('devolve 404 para id inexistente', async () => {
       await http()
         .get('/companies/3f1c2b9a-4d7e-4a52-9c0b-8e1d6f2a7b34')
         .expect(404);
     });
 
-    it('da 400 para id que nao e uuid', async () => {
+    it('devolve 400 para id que não é uuid', async () => {
       await http().get('/companies/abc').expect(400);
     });
   });
 
   describe('PATCH /companies/:id', () => {
-    it('atualiza so o campo enviado e move o alterado em', async () => {
+    it('atualiza apenas o campo enviado', async () => {
       const created = await createCompany();
 
       const response = await http()
         .patch(`/companies/${created.id}`)
-        .send({ tradeName: 'Padaria Bom Dia 24h' })
+        .send({ tradeName: 'Bruno Transportes Express' })
         .expect(200);
 
       expect(response.body).toMatchObject({
-        tradeName: 'Padaria Bom Dia 24h',
+        tradeName: 'Bruno Transportes Express',
         name: payload.name,
+        address: payload.address,
+        cnpj: CNPJ,
       });
-      expect(new Date(response.body.updatedAt).getTime()).toBeGreaterThan(
-        new Date(created.createdAt as string).getTime(),
-      );
+      expect(
+        new Date(response.body.updatedAt).getTime(),
+      ).toBeGreaterThanOrEqual(new Date(created.createdAt).getTime());
     });
 
-    it('valida o cnpj na atualizacao tambem', async () => {
+    it('aceita troca para CNPJ alfanumérico', async () => {
+      const created = await createCompany();
+
+      const response = await http()
+        .patch(`/companies/${created.id}`)
+        .send({ cnpj: ALPHANUMERIC_MASKED })
+        .expect(200);
+
+      expect(response.body.cnpj).toBe(ALPHANUMERIC);
+    });
+
+    it('recusa corpo vazio', async () => {
+      const created = await createCompany();
+
+      const response = await http()
+        .patch(`/companies/${created.id}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.message).toContain('ao menos um campo');
+    });
+
+    it('valida o CNPJ na atualização', async () => {
       const created = await createCompany();
 
       await http()
@@ -230,24 +318,24 @@ describe('Empresas (e2e)', () => {
         .expect(400);
     });
 
-    it('da 409 ao mudar para um cnpj de outra empresa', async () => {
+    it('devolve 409 ao mudar para o CNPJ de outra empresa', async () => {
       const first = await createCompany();
-      await createCompany({ cnpj: OTHER_CNPJ, name: 'Mercado Central LTDA' });
+      await createCompany({ cnpj: OTHER_CNPJ_MASKED, name: 'Bastos Logística LTDA' });
 
       await http()
         .patch(`/companies/${first.id}`)
-        .send({ cnpj: OTHER_CNPJ })
+        .send({ cnpj: OTHER_CNPJ_MASKED })
         .expect(409);
     });
 
-    it('da 404 para id inexistente', async () => {
+    it('devolve 404 para id inexistente', async () => {
       await http()
         .patch('/companies/3f1c2b9a-4d7e-4a52-9c0b-8e1d6f2a7b34')
         .send({ tradeName: 'Qualquer' })
         .expect(404);
     });
 
-    it('nao dispara e-mail: o aviso e so do cadastro', async () => {
+    it('não dispara e-mail: o aviso é apenas do cadastro', async () => {
       const created = await createCompany();
       sendCompanyCreated.mockClear();
 
@@ -269,7 +357,7 @@ describe('Empresas (e2e)', () => {
       await http().get('/companies').expect(200).expect([]);
     });
 
-    it('da 404 ao remover duas vezes', async () => {
+    it('devolve 404 ao remover duas vezes', async () => {
       const created = await createCompany();
 
       await http().delete(`/companies/${created.id}`).expect(204);
@@ -277,25 +365,27 @@ describe('Empresas (e2e)', () => {
     });
   });
 
-  // o caminho que a tela percorre, do cadastro ate a remocao
-  it('percorre o ciclo completo de cadastro, listagem, edicao e exclusao', async () => {
+  it('percorre o ciclo completo de cadastro, listagem, edição e exclusão', async () => {
     const created = await createCompany();
     expect(sendCompanyCreated).toHaveBeenCalledTimes(1);
 
-    await http().get('/companies').expect(200).expect((res) => {
-      expect(res.body).toHaveLength(1);
-    });
+    await http()
+      .get('/companies')
+      .expect(200)
+      .expect((res) => {
+        expect(res.body).toHaveLength(1);
+      });
 
     await http()
       .patch(`/companies/${created.id}`)
-      .send({ address: 'Av. Paulista, 1000 - Bela Vista' })
+      .send({ address: 'Rua Bastos, 45 - Vila Nova, Jundiaí/SP' })
       .expect(200);
 
     await http()
       .get(`/companies/${created.id}`)
       .expect(200)
       .expect((res) => {
-        expect(res.body.address).toBe('Av. Paulista, 1000 - Bela Vista');
+        expect(res.body.address).toBe('Rua Bastos, 45 - Vila Nova, Jundiaí/SP');
       });
 
     await http().delete(`/companies/${created.id}`).expect(204);
