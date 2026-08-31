@@ -1,16 +1,36 @@
-const CNPJ_LENGTH = 14;
+const BASE_LENGTH = 12;
 
-// pesos oficiais do calculo dos digitos verificadores
+// Únicos separadores que podem ser retirados. Qualquer outro caractere estranho
+// é motivo para recusar o valor, e não para removê-lo silenciosamente.
+const MASK_SEPARATORS = /[.\-/]/g;
+
+// As doze primeiras posições aceitam letras no formato novo; os dois dígitos
+// verificadores continuam sendo sempre numéricos.
+const CANONICAL_FORMAT = /^[0-9A-Z]{12}[0-9]{2}$/;
+
 const FIRST_DIGIT_WEIGHTS = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
 const SECOND_DIGIT_WEIGHTS = [6, ...FIRST_DIGIT_WEIGHTS];
 
-export function onlyDigits(value: string): string {
-  return value.replace(/\D/g, '');
+/**
+ * Devolve o CNPJ sem máscara e em maiúsculas, ou `null` se o valor tiver
+ * caracteres fora do formato.
+ */
+export function normalizeCnpj(value: string): string | null {
+  const canonical = value.trim().toUpperCase().replace(MASK_SEPARATORS, '');
+
+  return CANONICAL_FORMAT.test(canonical) ? canonical : null;
+}
+
+// Regra da NT COCAD/SUARA/RFB 49/2024: cada caractere entra no módulo 11 pelo
+// seu código ASCII menos 48. Para "0"-"9" isso devolve o próprio dígito, e para
+// "A"-"Z" devolve de 17 a 42.
+function characterValue(character: string): number {
+  return character.charCodeAt(0) - 48;
 }
 
 function checkDigit(base: string, weights: number[]): number {
   const sum = weights.reduce(
-    (total, weight, index) => total + Number(base[index]) * weight,
+    (total, weight, index) => total + characterValue(base[index]) * weight,
     0,
   );
 
@@ -19,36 +39,42 @@ function checkDigit(base: string, weights: number[]): number {
   return remainder < 2 ? 0 : 11 - remainder;
 }
 
-// valida os dois digitos verificadores, nao so o tamanho. um cnpj com 14 numeros
-// aleatorios passa em qualquer regex, mas nao existe na receita.
 export function isValidCnpj(value: string): boolean {
-  const digits = onlyDigits(value);
+  const canonical = normalizeCnpj(value);
 
-  if (digits.length !== CNPJ_LENGTH) {
+  if (canonical === null) {
     return false;
   }
 
-  // sequencias repetidas passam na conta dos digitos, entao ficam de fora na mao
-  if (/^(\d)\1+$/.test(digits)) {
+  // Um CNPJ com todos os caracteres iguais fecha o cálculo, mas não existe.
+  if (/^(.)\1{13}$/.test(canonical)) {
     return false;
   }
 
-  const first = checkDigit(digits, FIRST_DIGIT_WEIGHTS);
-  const second = checkDigit(digits, SECOND_DIGIT_WEIGHTS);
+  const base = canonical.slice(0, BASE_LENGTH);
+  const first = checkDigit(base, FIRST_DIGIT_WEIGHTS);
+  const second = checkDigit(`${base}${first}`, SECOND_DIGIT_WEIGHTS);
 
-  return digits[12] === String(first) && digits[13] === String(second);
+  return canonical.slice(BASE_LENGTH) === `${first}${second}`;
 }
 
-// so pra exibicao: 11222333000181 vira 11.222.333/0001-81
+/** Formata para exibição: `11222333000181` vira `11.222.333/0001-81`. */
 export function formatCnpj(value: string): string {
-  const digits = onlyDigits(value);
+  const canonical = normalizeCnpj(value);
 
-  if (digits.length !== CNPJ_LENGTH) {
+  if (canonical === null) {
     return value;
   }
 
-  return digits.replace(
-    /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
-    '$1.$2.$3/$4-$5',
-  );
+  return [
+    canonical.slice(0, 2),
+    '.',
+    canonical.slice(2, 5),
+    '.',
+    canonical.slice(5, 8),
+    '/',
+    canonical.slice(8, 12),
+    '-',
+    canonical.slice(12),
+  ].join('');
 }

@@ -1,13 +1,16 @@
 import type { TransformFnParams } from 'class-transformer';
-import { onlyDigits } from './cnpj.js';
-
-// os transforms rodam antes da validacao, entao o que o validator ve ja esta limpo
+import { normalizeCnpj } from './cnpj.js';
 
 export function trim({ value }: TransformFnParams): unknown {
   return typeof value === 'string' ? value.trim() : value;
 }
 
-// o front manda com mascara, o banco guarda so os numeros
-export function stripCnpjMask({ value }: TransformFnParams): unknown {
-  return typeof value === 'string' ? onlyDigits(value) : value;
+// Quando o valor é reconhecível, guarda a forma canônica. Quando não é, devolve
+// o original para o validador recusá-lo em vez de gravar algo transformado.
+export function toCanonicalCnpj({ value }: TransformFnParams): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  return normalizeCnpj(value) ?? value.trim();
 }

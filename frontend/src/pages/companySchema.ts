@@ -1,8 +1,6 @@
 import { z } from 'zod';
-import { isValidCnpj, onlyDigits } from '../lib/cnpj';
+import { isValidCnpj, normalizeCnpj } from '../lib/cnpj';
 
-// as regras acompanham as do dto do backend. a diferenca e o momento: aqui a
-// pessoa ve o erro enquanto preenche, la e a garantia de que nada invalido grava.
 export const companySchema = z.object({
   name: z
     .string()
@@ -13,9 +11,9 @@ export const companySchema = z.object({
   cnpj: z
     .string()
     .trim()
-    .refine((value) => isValidCnpj(value), 'CNPJ inválido.')
-    // sai daqui ja sem mascara, do jeito que a api espera
-    .transform(onlyDigits),
+    .refine(isValidCnpj, 'CNPJ inválido.')
+    // Sai daqui na forma canônica, que é o que a API armazena.
+    .transform((value) => normalizeCnpj(value) ?? value),
 
   tradeName: z
     .string()
@@ -30,6 +28,5 @@ export const companySchema = z.object({
     .max(255, 'O endereço deve ter no máximo 255 caracteres.'),
 });
 
-// o formulario trabalha com o cnpj mascarado, a api recebe so digitos
 export type CompanyFormValues = z.input<typeof companySchema>;
 export type CompanyFormOutput = z.output<typeof companySchema>;
