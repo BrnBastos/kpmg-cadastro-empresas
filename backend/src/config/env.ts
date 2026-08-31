@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
-// z.coerce.boolean() devolve true pra string "false", porque so faz Boolean(valor).
-// entao a leitura de booleano aqui e explicita.
+// z.coerce.boolean() faz apenas Boolean(valor), então a string "false" viraria
+// true. Por isso a leitura é explícita.
 const envBoolean = z
   .enum(['true', 'false'])
   .transform((value) => value === 'true');
 
-// a lista de destinatarios chega como uma string separada por virgula
 const emailList = z
   .string()
   .transform((value) =>
@@ -27,7 +26,7 @@ const envSchema = z.object({
   MAIL_HOST: z.string().min(1),
   MAIL_PORT: z.coerce.number().int().positive(),
   MAIL_SECURE: envBoolean.default(false),
-  // o mailpit aceita conexao sem autenticar, por isso usuario e senha sao opcionais
+  // O Mailpit aceita conexão sem autenticar, então as credenciais são opcionais.
   MAIL_USER: z.string().default(''),
   MAIL_PASSWORD: z.string().default(''),
   MAIL_FROM: z.string().min(1),
@@ -36,8 +35,8 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-// roda no boot, antes de qualquer modulo subir. se faltar variavel a aplicacao
-// nem chega a escutar na porta, em vez de quebrar so na primeira requisicao.
+// Roda antes de qualquer módulo subir: faltando variável, a aplicação nem chega
+// a escutar na porta, em vez de falhar na primeira requisição.
 export function validateEnv(config: Record<string, unknown>): Env {
   const result = envSchema.safeParse(config);
 

@@ -1,6 +1,5 @@
-// svg inline em vez de biblioteca de icones: e um icone so, e assim ele herda
-// a cor do botao pelo currentColor sem configuracao nenhuma.
-// aria-hidden porque o botao ja tem texto; o leitor de tela nao precisa do desenho.
+// SVG inline para herdar a cor do botão por currentColor. O aria-hidden mantém
+// o nome acessível vindo só do texto.
 
 export function TrashIcon() {
   return (

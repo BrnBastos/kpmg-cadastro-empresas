@@ -1,252 +1,109 @@
 # Cadastro de Empresas
 
-Aplicação web para gerenciar o cadastro de empresas, com as quatro operações de CRUD e
-notificação por e-mail a cada nova empresa registrada.
+Aplicação web para cadastrar empresas, com CRUD completo e notificação por e-mail
+a cada novo registro. Sem autenticação: a aplicação abre direto na listagem.
 
-Frontend em **React**, backend em **NestJS**, dados em **PostgreSQL** e envio de e-mail por
-**SMTP**. Não há autenticação: a aplicação abre direto na listagem.
+![Tela de listagem de empresas](docs/listagem.png)
 
----
+## Stack
 
-## Sumário
+| Camada | Tecnologia |
+|---|---|
+| Frontend | React 19, Vite 8, React Router, TanStack Query, React Hook Form + Zod |
+| Backend | NestJS 12, Prisma 7, class-validator, Nodemailer |
+| Banco | PostgreSQL 18 |
+| E-mail (dev) | Mailpit |
+| Testes | Vitest 4 + Supertest |
 
-1. [Como rodar](#como-rodar)
-2. [Variáveis de ambiente](#variáveis-de-ambiente)
-3. [Arquitetura](#arquitetura)
-4. [Decisões técnicas](#decisões-técnicas)
-5. [Como os requisitos foram atendidos](#como-os-requisitos-foram-atendidos)
-6. [Testes](#testes)
-7. [Possíveis evoluções](#possíveis-evoluções)
+## Pré-requisitos
 
----
+- Docker
+- Node 24 (versão exata em `.nvmrc`; `engines.node` exige `>=24.0.0`)
 
-## Como rodar
+## Início rápido
 
-**Pré-requisitos:** Docker e Node 24 (a versão exata está no `.nvmrc`).
-
-### 1. Suba o banco e o servidor de e-mail
+Com `make`:
 
 ```bash
-docker compose up -d
+make setup     # sobe Postgres e Mailpit, cria os .env, instala e migra
+make dev-api   # em um terminal
+make dev-web   # em outro
 ```
 
-Isso levanta o PostgreSQL na porta `5432` e o [Mailpit](https://mailpit.axllent.org/) nas portas
-`1025` (SMTP) e `8025` (interface web). O Mailpit é um servidor SMTP de desenvolvimento: ele
-captura tudo que a aplicação envia e mostra numa caixa de entrada no navegador, sem precisar de
-nenhuma credencial de e-mail real.
-
-### 2. Backend
+Sem `make`:
 
 ```bash
+docker compose up -d --wait
+
 cd backend
 cp .env.example .env
+cp .env.test.example .env.test
 npm install
 npx prisma migrate deploy
 npm run start:dev
-```
 
-A API sobe em `http://localhost:3000` e a documentação Swagger fica em
-**`http://localhost:3000/docs`**.
-
-### 3. Frontend
-
-Em outro terminal:
-
-```bash
+# em outro terminal
 cd frontend
 cp .env.example .env
 npm install
 npm run dev
 ```
 
-A aplicação abre em **`http://localhost:5173`**.
+| Serviço | URL |
+|---|---|
+| Aplicação | http://localhost:5173 |
+| API | http://localhost:3000 |
+| Swagger | http://localhost:3000/docs |
+| Mailpit | http://localhost:8025 |
 
-### 4. Veja o e-mail chegar
-
-Cadastre uma empresa pela tela e abra **`http://localhost:8025`**. O aviso estará na caixa de
-entrada do Mailpit, endereçado ao grupo definido em `MAIL_NOTIFICATION_RECIPIENTS`.
-
-> Para um CNPJ de teste válido: `11.222.333/0001-81` ou `11.444.777/0001-61`. Os dígitos
-> verificadores são conferidos de verdade, então um número qualquer é recusado.
-
-### 5. Testes
-
-```bash
-cd backend
-cp .env.test.example .env.test
-npm test        # unitários
-npm run test:e2e  # ponta a ponta, contra o banco kpmg_test
-```
-
----
+CNPJs válidos para teste: `11.222.333/0001-81` (numérico) e `00.000.000/E08G-12`
+(alfanumérico). Os dígitos verificadores são conferidos, então um número
+inventado é recusado.
 
 ## Variáveis de ambiente
 
-### `backend/.env`
+`backend/.env` — validado com Zod no boot. Faltando uma variável obrigatória, o
+processo encerra apontando qual, em vez de falhar na primeira requisição.
 
-| Variável | Exemplo | O que acontece se faltar |
+| Variável | Exemplo | Obrigatória |
 |---|---|---|
-| `NODE_ENV` | `development` | Assume `development` |
-| `PORT` | `3000` | Assume `3000` |
-| `CORS_ORIGIN` | `http://localhost:5173` | **A API não sobe** |
-| `DATABASE_URL` | `postgresql://kpmg:kpmg@localhost:5432/kpmg?schema=public` | **A API não sobe** |
-| `MAIL_HOST` | `localhost` | **A API não sobe** |
-| `MAIL_PORT` | `1025` | **A API não sobe** |
-| `MAIL_SECURE` | `false` | Assume `false` |
-| `MAIL_USER` | *(vazio)* | Assume vazio, e nenhuma autenticação é enviada |
-| `MAIL_PASSWORD` | *(vazio)* | Assume vazio |
-| `MAIL_FROM` | `Cadastro <nao-responda@kpmg-teste.local>` | **A API não sobe** |
-| `MAIL_NOTIFICATION_RECIPIENTS` | `cadastro@x.com,financeiro@x.com` | **A API não sobe** |
+| `NODE_ENV` | `development` | não (padrão `development`) |
+| `PORT` | `3000` | não (padrão `3000`) |
+| `CORS_ORIGIN` | `http://localhost:5173` | sim |
+| `DATABASE_URL` | `postgresql://kpmg:kpmg@localhost:5432/kpmg?schema=public` | sim |
+| `MAIL_HOST` | `localhost` | sim |
+| `MAIL_PORT` | `1025` | sim |
+| `MAIL_SECURE` | `false` | não (padrão `false`) |
+| `MAIL_USER` / `MAIL_PASSWORD` | vazios em dev | não |
+| `MAIL_FROM` | `Cadastro <nao-responda@brunotransportes.local>` | sim |
+| `MAIL_NOTIFICATION_RECIPIENTS` | `cadastro@x.local,financeiro@x.local` | sim |
 
-O arquivo é validado com [zod](https://zod.dev) durante o boot. Se faltar qualquer variável
-obrigatória, o processo encerra apontando exatamente quais são, em vez de a aplicação subir e
-quebrar na primeira requisição.
+`frontend/.env`: `VITE_API_URL=http://localhost:3000`.
 
-### `frontend/.env`
+Para usar um SMTP real, basta trocar as variáveis `MAIL_*`. A autenticação só é
+enviada quando `MAIL_USER` está preenchido.
 
-| Variável | Exemplo |
-|---|---|
-| `VITE_API_URL` | `http://localhost:3000` |
+## Vendo o e-mail
 
-### Usando um SMTP real
-
-Basta trocar as variáveis `MAIL_*`, sem alterar código. Para Gmail, por exemplo:
-
-```env
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=465
-MAIL_SECURE=true
-MAIL_USER=seu-usuario@gmail.com
-MAIL_PASSWORD=sua-senha-de-app
-```
-
-Quando `MAIL_USER` está preenchido, a autenticação passa a ser enviada; quando está vazio, não —
-o Mailpit recusa o handshake se receber autenticação sem esperá-la.
-
----
+O Mailpit é um servidor SMTP de desenvolvimento: captura o que a aplicação envia
+e mostra numa caixa de entrada web, sem credenciais reais. Cadastre uma empresa e
+abra http://localhost:8025.
 
 ## Arquitetura
 
 ```
-┌──────────────────┐        HTTP/JSON        ┌──────────────────┐
-│  React + Vite    │ ──────────────────────▶ │  NestJS          │
-│  localhost:5173  │ ◀────────────────────── │  localhost:3000  │
-└──────────────────┘                         └────────┬─────────┘
-                                                      │
-                                    Prisma ORM        │        SMTP
-                                 ┌────────────────────┴───────────────┐
-                                 ▼                                    ▼
-                        ┌──────────────────┐              ┌──────────────────┐
-                        │  PostgreSQL 18   │              │  Mailpit         │
-                        │  localhost:5432  │              │  localhost:8025  │
-                        └──────────────────┘              └──────────────────┘
+React (5173) ──HTTP/JSON──> NestJS (3000) ──Prisma──> PostgreSQL (5432)
+                                  │
+                                  └──SMTP──> Mailpit (1025 / UI 8025)
 ```
 
-### Como as partes conversam
+O frontend conversa com a API por um único cliente HTTP (`src/api/client.ts`),
+que centraliza URL base, cabeçalhos e a tradução do erro. O TanStack Query
+invalida a listagem depois de cada cadastro, edição ou exclusão.
 
-**Frontend → Backend.** O React fala com a API por HTTP/JSON, através de um único cliente
-(`frontend/src/api/client.ts`) que centraliza a URL base, os cabeçalhos e a tradução de erro. O
-TanStack Query cuida do cache e de refazer a busca da listagem depois de cada cadastro, edição ou
-exclusão, de modo que a tabela nunca fica exibindo dado velho.
-
-**Backend → Banco.** O NestJS acessa o PostgreSQL pelo Prisma. O `PrismaService` estende o
-`PrismaClient` e se conecta no boot do módulo, encerrando o pool no desligamento da aplicação.
-O schema fica em `backend/prisma/schema.prisma` e as migrations em `backend/prisma/migrations`.
-
-**Backend → E-mail.** O `MailService` monta um transporte SMTP com Nodemailer a partir das
-variáveis de ambiente e envia a notificação. Em desenvolvimento o destino é o Mailpit; em produção,
-basta apontar para o SMTP real.
-
-### O fluxo do cadastro, ponta a ponta
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as Navegador (React)
-    participant A as API (NestJS)
-    participant D as PostgreSQL
-    participant S as SMTP
-
-    U->>A: POST /companies
-    Note over A: valida os campos e os<br/>dígitos verificadores do CNPJ
-    A->>D: INSERT em companies
-
-    alt CNPJ já cadastrado
-        D-->>A: violação de unicidade (P2002)
-        A-->>U: 409 apontando o campo cnpj
-    else gravou com sucesso
-        D-->>A: empresa criada
-        A->>S: envia o aviso ao grupo
-        alt SMTP indisponível
-            S--xA: falha no envio
-            Note over A: registra no log e segue
-        end
-        A-->>U: 201 com a empresa
-        U->>A: GET /companies (lista atualizada)
-    end
-```
-
-### Estrutura de pastas
-
-```
-kpmg/
-├── docker-compose.yml          # postgres + mailpit
-├── backend/
-│   ├── prisma/                 # schema e migrations
-│   └── src/
-│       ├── companies/          # controller, service, dtos
-│       ├── mail/               # transporte smtp e template
-│       ├── prisma/             # conexao com o banco
-│       ├── config/             # validacao do .env
-│       ├── common/             # filtro de erro, validacao de cnpj
-│       └── setup-app.ts        # pipes e filtros, usados pelo main e pelos testes
-└── frontend/
-    └── src/
-        ├── api/                # cliente http e tipos
-        ├── pages/              # listagem e formulario
-        ├── components/         # campo, dialogo, aviso
-        └── lib/                # cnpj e datas
-```
-
----
-
-## Decisões técnicas
-
-### CNPJ validado pelos dígitos verificadores, não por formato
-
-Quatorze números aleatórios passam em qualquer expressão regular, mas não formam um CNPJ real. A
-validação (`backend/src/common/validation/cnpj.ts`) calcula os dois dígitos verificadores e recusa
-também as sequências repetidas, que passariam na conta. A mesma regra existe no frontend, para que
-o erro apareça enquanto a pessoa digita — mas quem decide continua sendo a API.
-
-### CNPJ guardado sem máscara
-
-A coluna guarda apenas os quatorze dígitos, independentemente de o cliente ter enviado
-`11.222.333/0001-81` ou `11222333000181`. A máscara é aplicada na exibição. Sem isso, o mesmo CNPJ
-entraria duas vezes com formatações diferentes e o índice de unicidade não perceberia.
-
-### Unicidade garantida pelo banco, não por consulta prévia
-
-Não existe um `SELECT` para checar se o CNPJ já existe antes de gravar. Entre essa consulta e o
-`INSERT` cabe outra requisição gravando o mesmo CNPJ, e o problema voltaria de forma intermitente.
-Quem garante a unicidade é o índice do PostgreSQL; o erro `P2002` do Prisma é traduzido para
-**409 Conflict**.
-
-### Falha no e-mail não invalida o cadastro
-
-Quando o e-mail é enviado, a empresa **já está gravada**. Derrubar a requisição nesse ponto
-significaria devolver erro para uma operação que deu certo, e a pessoa tentaria cadastrar de novo.
-Então a falha é registrada no log e a resposta continua sendo `201`.
-
-Essa regra vive no `CompaniesService`, e não dentro do `MailService`: é uma decisão sobre o
-cadastro, não sobre o envio. O `MailService` apenas envia e deixa o erro subir.
-
-O tempo de espera do SMTP também é limitado explicitamente. Sem isso, o Nodemailer passaria minutos
-tentando alcançar um servidor fora do ar, e a requisição do cadastro ficaria esperando junto.
-
-### Um único formato de erro
-
-Toda resposta de erro sai no mesmo formato, com um mapa opcional por campo:
+No backend, `CompaniesService` usa o `PrismaService` diretamente e chama o
+`MailService` após gravar. Erros do Prisma viram erros HTTP no próprio service,
+e um filtro global padroniza o corpo da resposta:
 
 ```json
 {
@@ -255,141 +112,103 @@ Toda resposta de erro sai no mesmo formato, com um mapa opcional por campo:
   "message": "Já existe uma empresa cadastrada com o CNPJ 11.222.333/0001-81.",
   "fields": { "cnpj": "Este CNPJ já está cadastrado." },
   "path": "/companies",
-  "timestamp": "2026-08-28T15:24:40.461Z"
+  "timestamp": "2026-08-30T12:00:00.000Z"
 }
 ```
 
-O campo `fields` é o que permite ao formulário colocar cada mensagem no input a que ela pertence,
-em vez de exibir um alerta solto no topo da tela. O `error` é o rótulo técnico do status HTTP, em
-inglês; o `message` é o texto que a pessoa lê, em português.
+O `fields` é o que permite ao formulário mostrar cada mensagem no input certo.
 
-Erros inesperados são registrados com o stack completo no log e respondidos com uma mensagem
-genérica, para não vazar detalhe interno.
-
-### Ambiente validado no boot
-
-As variáveis de ambiente passam por um schema zod antes de qualquer módulo subir. Faltando uma
-variável obrigatória, a aplicação encerra dizendo qual — em vez de subir e falhar na primeira
-requisição, quando o problema já está longe da causa.
-
-### `PATCH` em vez de `PUT`
-
-A edição envia apenas os campos alterados. Com `PUT`, o cliente precisaria reenviar o registro
-inteiro e um campo esquecido apagaria o valor existente.
-
-### `CriadoEm` e `AlteradoEm` controlados pelo banco
-
-São preenchidos pelo Prisma (`@default(now())` e `@updatedAt`) e nunca aceitos pela API. Datas de
-auditoria que o cliente pode escrever não servem para auditar nada.
-
-### Mailpit no lugar do MailHog
-
-O MailHog está arquivado desde 2021, com a última versão publicada em 2020. O Mailpit é mantido,
-cumpre o mesmo papel e usa as mesmas portas.
-
-### Prisma 7 e TypeScript 6
-
-`prisma@latest` resolve hoje para uma versão candidata (`8.0.0-rc`), e `typescript@latest` para a
-linha 7, enquanto o próprio `@nestjs/cli` depende de TypeScript 6. As versões foram fixadas nas
-linhas estáveis e compatíveis com o framework.
-
-### Sem biblioteca de componentes no frontend
-
-O requisito pede uma interface simples e objetiva. Para duas telas e quatro campos, um conjunto
-pequeno de tokens CSS e estilos próprios cobre o necessário sem trazer a configuração e o peso de
-uma biblioteca inteira.
-
-### Tipos escritos à mão no frontend
-
-`frontend/src/api/types.ts` espelha os DTOs do backend. São dois projetos independentes, e um passo
-de geração de tipos custaria mais a quem for rodar o projeto do que este arquivo custa para manter.
-
----
-
-## Como os requisitos foram atendidos
-
-| Requisito | Onde está |
-|---|---|
-| Cadastro com Nome, CNPJ, Nome Fantasia, Endereço, CriadoEm, AlteradoEm | `backend/prisma/schema.prisma`, `backend/src/companies/dto/` |
-| **Criar** empresa | `POST /companies` — `companies.controller.ts` |
-| **Ler** / listar empresas | `GET /companies` — ordenado da mais recente para a mais antiga |
-| **Atualizar** empresa | `PATCH /companies/:id` |
-| **Excluir** empresa | `DELETE /companies/:id` |
-| Tela de listagem com os dados | `frontend/src/pages/CompanyListPage.tsx` |
-| Botão "Cadastrar Nova Empresa" levando à tela de cadastro | Mesmo arquivo, rota `/companies/new` |
-| E-mail para um grupo previamente configurado | `MAIL_NOTIFICATION_RECIPIENTS` → `backend/src/mail/mail.service.ts` |
-| Envio automático ao criar | `CompaniesService.create` dispara o aviso após gravar |
-| Frontend em React | React 19 + Vite 8 |
-| Backend em NestJS com API REST | NestJS 12, documentada em `/docs` |
-| Banco relacional | PostgreSQL 18 via Prisma |
-| Testes automatizados de CRUD no backend | `backend/src/**/*.spec.ts` e `backend/test/companies.e2e-spec.ts` |
-| Testes cobrindo o envio de e-mail | `mail.service.spec.ts`, `companies.service.spec.ts` e o e2e |
-| Sem autenticação | Nenhuma rota protegida, nenhum login |
-
-### Endpoints
+## Endpoints
 
 | Método | Rota | Sucesso | Erros |
 |---|---|---|---|
-| `POST` | `/companies` | `201` | `400` validação, `409` CNPJ duplicado |
+| `POST` | `/companies` | `201` | `400`, `409` CNPJ duplicado |
 | `GET` | `/companies` | `200` | — |
 | `GET` | `/companies/:id` | `200` | `400` id inválido, `404` |
-| `PATCH` | `/companies/:id` | `200` | `400`, `404`, `409` |
+| `PATCH` | `/companies/:id` | `200` | `400` (inclui corpo vazio), `404`, `409` |
 | `DELETE` | `/companies/:id` | `204` | `400` id inválido, `404` |
 
----
+A resposta do `POST` traz os dados da empresa mais `notificationSent`, indicando
+se o aviso por e-mail chegou a ser enviado. Documentação completa em `/docs`.
 
 ## Testes
 
-São **54 testes** no backend, em duas camadas, ambos rodando com Vitest.
-
-### Unitários (32)
-
 ```bash
-cd backend && npm test
+cd backend
+npm test          # 39 testes unitários
+npm run test:e2e  # 31 testes ponta a ponta
+npm run test:cov  # roda os dois e mede a cobertura combinada
 ```
 
-| Arquivo | O que cobre |
+Ou `make verify`, que executa lint, checagem de tipos, build e testes dos dois
+projetos sem alterar arquivos.
+
+Os testes e2e sobem a aplicação inteira contra um PostgreSQL real (banco
+`kpmg_test`, criado por `docker/postgres/init.sql`) e cobrem a integração HTTP +
+Nest + Prisma. Só o `MailService` é substituído por um dublê; o comportamento do
+Nodemailer é verificado nos testes unitários, e a entrega efetiva no Mailpit é
+uma conferência manual.
+
+As duas suítes rodam em ordem aleatória (`sequence.shuffle`) e as tabelas são
+limpas antes de cada caso.
+
+Cobertura medida sobre `src`, excluindo o client gerado pelo Prisma, o `main.ts`
+e os arquivos de módulo (declarativos, exercitados pelo e2e):
+
+| Métrica | Valor |
 |---|---|
-| `common/validation/cnpj.spec.ts` | Dígitos verificadores, sequências repetidas, máscara |
-| `companies/companies.service.spec.ts` | As quatro operações, o disparo do e-mail e a tradução dos erros do Prisma |
-| `mail/mail.service.spec.ts` | Destinatários, assunto, corpo, autenticação condicional e propagação da falha |
-| `mail/company-created.template.spec.ts` | Conteúdo do e-mail e escape de HTML |
+| Statements | 96,7% |
+| Lines | 96,7% |
+| Functions | 100% |
+| Branches | 68,9% |
 
-### Ponta a ponta (22)
+## Decisões técnicas
 
-```bash
-cd backend && npm run test:e2e
-```
+**CNPJ numérico e alfanumérico.** Desde julho de 2026 o CNPJ pode conter letras
+nas doze primeiras posições, mantendo dois dígitos verificadores numéricos. O
+cálculo segue a Nota Técnica COCAD/SUARA/RFB nº 49/2024: cada caractere entra no
+módulo 11 pelo seu código ASCII menos 48. A normalização remove apenas os
+separadores `.`, `/` e `-` e converte para maiúsculas; qualquer outro caractere
+faz o valor ser recusado. Isso corrige um problema da versão anterior, em que
+limpar tudo que não fosse dígito transformava `11abc222.333/0001-81` no CNPJ
+válido `11222333000181`.
 
-Sobem a aplicação inteira e batem na API por HTTP, com um banco PostgreSQL de verdade
-(`kpmg_test`, criado por `docker/postgres/init.sql`). Só o `MailService` é substituído por um
-dublê — o envio em si tem teste próprio.
+**Unicidade no banco.** Não há consulta de "esse CNPJ já existe" antes de gravar:
+entre o `SELECT` e o `INSERT` cabe outra requisição com o mesmo valor. O índice
+único do PostgreSQL é a garantia, e o erro `P2002` do Prisma vira `409`. Como a
+coluna guarda a forma canônica, versões mascarada e sem máscara colidem.
 
-Cobrem o ciclo completo (cadastrar, listar, editar, excluir), as validações, o CNPJ duplicado, os
-`404` e o comportamento do e-mail.
+**Datas controladas pelo sistema.** `createdAt` e `updatedAt` são preenchidos
+pelo Prisma e nunca aceitos pela API.
 
-### Sobre a qualidade dos testes
+**Notificação síncrona e best-effort.** A empresa já está gravada quando o e-mail
+sai, então uma falha de SMTP não invalida o cadastro. O envio é tentado na mesma
+requisição, com timeouts explícitos, e o resultado volta em `notificationSent`
+para a tela dizer o que de fato aconteceu, em vez de afirmar que o e-mail foi
+enviado. Para um ambiente que exija garantia de entrega, o caminho seria uma fila
+ou um outbox — desnecessário neste escopo.
 
-- **O e-mail é verificado pelo conteúdo, não pela chamada.** As asserções conferem os
-  destinatários, o assunto e o CNPJ formatado no corpo — verificar apenas que "o método foi
-  chamado" não provaria que a mensagem certa saiu.
-- **Existe um teste para o SMTP fora do ar**, garantindo que o cadastro continua respondendo `201`.
-- **As tabelas são limpas antes de cada caso**, e não depois: um teste que quebra no meio ainda
-  deixa a tabela limpa para o próximo.
-- **A suíte passa em ordem aleatória** (`--sequence.shuffle`) e numa segunda execução seguida, sem
-  nenhum reset. Se a ordem importasse, o teste é que estaria errado.
-- **O banco de testes é separado do de desenvolvimento**, então rodar a suíte nunca apaga dados.
+**PATCH com campos alterados.** O formulário usa os campos marcados como
+modificados pelo React Hook Form e envia só eles. Se nada mudou, nenhuma
+requisição é feita. No backend, um `PATCH` de corpo vazio é recusado com `400`,
+pela mesma razão que campos desconhecidos são recusados: esconder o problema
+ajuda menos do que apontá-lo.
 
----
+**Prisma direto no service.** Para um CRUD de uma entidade, uma interface de
+repositório só moveria as chamadas de lugar. O Prisma já é a camada de acesso.
 
-## Possíveis evoluções
+**Validação nos dois lados.** As regras de CNPJ existem no frontend para o erro
+aparecer enquanto a pessoa digita, e no backend como autoridade final. Cada
+aplicação tem uma única implementação (`backend/src/common/validation/cnpj.ts` e
+`frontend/src/lib/cnpj.ts`).
 
-Ficaram de fora por não fazerem parte do escopo pedido, mas seriam os próximos passos naturais:
+## Limitações e possíveis evoluções
 
-- **Fila para o envio de e-mail.** Hoje o envio acontece dentro da requisição. Com volume, o
-  caminho seria publicar o evento numa fila e entregar em segundo plano, com novas tentativas.
-- **Paginação e busca na listagem**, necessárias assim que o cadastro passar de algumas centenas de
-  empresas.
-- **Exclusão lógica e histórico de alterações**, se o cadastro precisar de auditoria.
-- **Consulta de endereço por CEP**, para reduzir digitação e padronizar o endereço.
-- **Pipeline de CI** executando lint, build e as duas suítes de teste a cada push.
+- **Sem autenticação**, conforme o enunciado. Em produção, a API precisaria ao
+  menos de autenticação e rate limiting antes de ficar exposta.
+- **Sem paginação.** A listagem devolve todas as empresas; passaria a exigir
+  paginação e busca a partir de algumas centenas de registros.
+- **E-mail sem garantia de entrega.** Uma falha é registrada em log e informada
+  na tela, mas não há nova tentativa. Fila ou outbox resolveriam.
+- **Exclusão definitiva**, sem histórico de alterações.
+- **Sem testes automatizados no frontend**, que o enunciado dispensa.

@@ -1,15 +1,14 @@
 import { BadRequestException, type ValidationError } from '@nestjs/common';
 import type { ApiExceptionPayload } from '../http/api-error.js';
 
-// chave que o class-validator usa quando o whitelist barra um campo desconhecido
+// Chave usada pelo class-validator quando o whitelist barra um campo.
 const UNKNOWN_PROPERTY = 'whitelistValidation';
 
 function isUnknownProperty(error: ValidationError): boolean {
   return Object.keys(error.constraints ?? {}).includes(UNKNOWN_PROPERTY);
 }
 
-// pega o primeiro erro de cada campo. o formulario mostra uma mensagem por input,
-// entao devolver a lista inteira so daria trabalho pro front sem ganho nenhum.
+// Um erro por campo: o formulário mostra uma mensagem por input.
 function collectFieldErrors(errors: ValidationError[]): Record<string, string> {
   const fields: Record<string, string> = {};
 
@@ -24,16 +23,13 @@ function collectFieldErrors(errors: ValidationError[]): Record<string, string> {
   return fields;
 }
 
-// substitui o erro padrao do ValidationPipe, que devolve um array solto de strings
-// sem dizer de qual campo cada mensagem veio.
 export function validationExceptionFactory(
   errors: ValidationError[],
 ): BadRequestException {
   const unknown = errors.filter(isUnknownProperty);
 
-  // campo que nao existe no dto e erro de quem chamou a api, nao do formulario.
-  // nao entra em "fields" porque nao ha input pra destacar, e a mensagem padrao
-  // do class-validator vem em ingles.
+  // Campo inexistente é erro de quem chamou a API, não do formulário: não há
+  // input para destacar, e o texto padrão do class-validator vem em inglês.
   if (unknown.length > 0) {
     const names = unknown.map((error) => error.property).join(', ');
 

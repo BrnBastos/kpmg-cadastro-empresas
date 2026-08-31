@@ -8,8 +8,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import type { Env } from '../config/env.js';
 
-// o prisma 7 nao le mais a DATABASE_URL sozinho: a conexao entra por um adapter,
-// e quem sabe a url e o ConfigService, ja validado no boot.
+// O Prisma 7 não lê mais a DATABASE_URL sozinho: a conexão entra por um adapter,
+// e quem conhece a URL é o ConfigService, já validado no boot.
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -27,7 +27,7 @@ export class PrismaService
     await this.$connect();
   }
 
-  // sem isso o pool fica aberto e a suite de testes nao encerra
+  // Sem isto o pool fica aberto e a suíte de testes não encerra.
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
   }

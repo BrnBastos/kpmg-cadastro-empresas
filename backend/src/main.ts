@@ -11,7 +11,6 @@ async function bootstrap(): Promise<void> {
 
   app.enableCors({ origin: config.get('CORS_ORIGIN', { infer: true }) });
 
-  // faz o onModuleDestroy rodar no ctrl+c e fechar o pool do prisma
   app.enableShutdownHooks();
 
   const swagger = new DocumentBuilder()

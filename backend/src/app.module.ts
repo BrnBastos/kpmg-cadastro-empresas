@@ -9,7 +9,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      // a suite e2e roda contra outro banco, entao le outro arquivo
+      // A suíte e2e roda contra outro banco, então lê outro arquivo.
       envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
     }),
     PrismaModule,
