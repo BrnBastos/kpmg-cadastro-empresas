@@ -1,3 +1,7 @@
 # client gerado pelo prisma: sai do npm install via script postinstall,
 # entao nao faz sentido versionar
 /src/generated/prisma
+
+# Relatórios intermediários de cobertura.
+/.vitest-reports
+/coverage
