@@ -160,7 +160,7 @@ e os arquivos de módulo (declarativos, exercitados pelo e2e):
 | Statements | 96,7% |
 | Lines | 96,7% |
 | Functions | 100% |
-| Branches | 68,9% |
+| Branches | 68,4% |
 
 ## Decisões técnicas
 
