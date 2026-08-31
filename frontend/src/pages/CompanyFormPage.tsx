@@ -10,10 +10,11 @@ import {
   getCompany,
   updateCompany,
 } from '../api/companies';
-import type { CompanyInput } from '../api/types';
+import type { Company, CompanyInput } from '../api/types';
 import { Alert } from '../components/Alert';
 import { TextField } from '../components/TextField';
 import { maskCnpj } from '../lib/cnpj';
+import type { FlashMessage } from './flash';
 import {
   companySchema,
   type CompanyFormOutput,
@@ -27,12 +28,38 @@ const EMPTY: CompanyFormValues = {
   address: '',
 };
 
-// campos que o formulario conhece, pra so aceitar erro de servidor que caiba em um deles
 const FIELD_NAMES = ['name', 'cnpj', 'tradeName', 'address'] as const;
 type FieldName = (typeof FIELD_NAMES)[number];
 
 function isFieldName(value: string): value is FieldName {
   return FIELD_NAMES.includes(value as FieldName);
+}
+
+interface SaveResult {
+  company: Company;
+  /** `null` na edição, que não dispara aviso. */
+  notificationSent: boolean | null;
+}
+
+function successMessage(
+  { company, notificationSent }: SaveResult,
+  isEditing: boolean,
+): FlashMessage {
+  if (isEditing) {
+    return { text: `Empresa ${company.name} atualizada.`, variant: 'success' };
+  }
+
+  if (notificationSent) {
+    return {
+      text: `Empresa ${company.name} cadastrada e o aviso por e-mail foi enviado.`,
+      variant: 'success',
+    };
+  }
+
+  return {
+    text: `Empresa ${company.name} cadastrada, mas o aviso por e-mail não pôde ser enviado.`,
+    variant: 'warning',
+  };
 }
 
 export function CompanyFormPage() {
@@ -48,7 +75,7 @@ export function CompanyFormPage() {
     setError,
     setValue,
     setFocus,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, dirtyFields },
   } = useForm<CompanyFormValues, unknown, CompanyFormOutput>({
     resolver: zodResolver(companySchema),
     defaultValues: EMPTY,
@@ -60,7 +87,6 @@ export function CompanyFormPage() {
     enabled: isEditing,
   });
 
-  // preenche o formulario quando os dados da empresa chegam
   useEffect(() => {
     if (existing.data) {
       reset({
@@ -72,27 +98,32 @@ export function CompanyFormPage() {
     }
   }, [existing.data, reset]);
 
-  const save = useMutation({
-    mutationFn: (input: CompanyInput) =>
-      isEditing ? updateCompany(id as string, input) : createCompany(input),
+  const save = useMutation<SaveResult, ApiError, Partial<CompanyInput>>({
+    mutationFn: async (input) => {
+      if (isEditing) {
+        const company = await updateCompany(id as string, input);
 
-    onSuccess: async (company) => {
+        return { company, notificationSent: null };
+      }
+
+      const { notificationSent, ...company } = await createCompany(
+        input as CompanyInput,
+      );
+
+      return { company, notificationSent };
+    },
+
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries({ queryKey: companiesKeys.all });
 
-      // volta pra listagem ja atualizada, com o recado do que aconteceu
       void navigate('/', {
         replace: true,
-        state: {
-          message: isEditing
-            ? `Empresa ${company.name} atualizada.`
-            : `Empresa ${company.name} cadastrada. O aviso por e-mail foi disparado.`,
-        },
+        state: { flash: successMessage(result, isEditing) },
       });
     },
 
-    onError: (error: ApiError) => {
-      // a api diz qual campo recusou, entao a mensagem vai pro input certo
-      // em vez de virar um alerta solto no topo da tela
+    onError: (error) => {
+      // A API diz qual campo recusou, então a mensagem vai para o input certo.
       const [firstField] = Object.keys(error.fields ?? {}).filter(isFieldName);
 
       if (firstField && error.fields) {
@@ -105,9 +136,32 @@ export function CompanyFormPage() {
     },
   });
 
-  const onSubmit = handleSubmit((values) => save.mutateAsync(values).catch(() => undefined));
+  const onSubmit = handleSubmit(async (values) => {
+    if (!isEditing) {
+      await save.mutateAsync(values).catch(() => undefined);
 
-  // erro que nao coube em nenhum campo continua precisando aparecer
+      return;
+    }
+
+    // Na edição só sobem os campos que mudaram, que é o que o PATCH espera.
+    const changed = Object.fromEntries(
+      Object.entries(values).filter(([field]) => field in dirtyFields),
+    ) as Partial<CompanyInput>;
+
+    if (Object.keys(changed).length === 0) {
+      void navigate('/', {
+        replace: true,
+        state: {
+          flash: { text: 'Nenhuma alteração para salvar.', variant: 'success' },
+        },
+      });
+
+      return;
+    }
+
+    await save.mutateAsync(changed).catch(() => undefined);
+  });
+
   const generalError =
     save.error instanceof ApiError &&
     !Object.keys(save.error.fields ?? {}).some(isFieldName)
@@ -151,14 +205,18 @@ export function CompanyFormPage() {
         </div>
       </header>
 
-      <form className="card form" onSubmit={(event) => void onSubmit(event)} noValidate>
+      <form
+        className="card form"
+        onSubmit={(event) => void onSubmit(event)}
+        noValidate
+      >
         {generalError && <Alert variant="error">{generalError}</Alert>}
 
         <TextField
           id="name"
           label="Razão social"
           autoComplete="organization"
-          placeholder="Padaria Bom Dia LTDA"
+          placeholder="Bruno Transportes LTDA"
           error={errors.name?.message}
           {...register('name')}
         />
@@ -166,15 +224,17 @@ export function CompanyFormPage() {
         <TextField
           id="cnpj"
           label="CNPJ"
-          inputMode="numeric"
-          placeholder="00.000.000/0000-00"
-          hint="Pode digitar com ou sem pontuação."
+          placeholder="11.222.333/0001-81"
+          hint="Aceita o formato numérico e o alfanumérico, com ou sem pontuação."
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
           error={errors.cnpj?.message}
           {...register('cnpj', {
-            // a mascara entra enquanto digita, entao o campo nunca mostra
-            // um numero corrido dificil de conferir
             onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
-              setValue('cnpj', maskCnpj(event.target.value));
+              setValue('cnpj', maskCnpj(event.target.value), {
+                shouldDirty: true,
+              });
             },
           })}
         />
@@ -182,7 +242,7 @@ export function CompanyFormPage() {
         <TextField
           id="tradeName"
           label="Nome fantasia"
-          placeholder="Padaria Bom Dia"
+          placeholder="Bruno Transportes"
           error={errors.tradeName?.message}
           {...register('tradeName')}
         />
@@ -191,7 +251,7 @@ export function CompanyFormPage() {
           id="address"
           label="Endereço"
           autoComplete="street-address"
-          placeholder="Rua das Flores, 123 - Centro, São Paulo/SP"
+          placeholder="Rod. Anhanguera, km 78 - Campinas/SP"
           error={errors.address?.message}
           {...register('address')}
         />
@@ -203,8 +263,7 @@ export function CompanyFormPage() {
           <button
             type="submit"
             className="btn btn--primary"
-            // trava o envio enquanto a requisicao esta em curso, senao dois
-            // cliques rapidos criam duas empresas
+            // Dois cliques rápidos criariam duas empresas.
             disabled={isSubmitting || save.isPending}
           >
             {save.isPending

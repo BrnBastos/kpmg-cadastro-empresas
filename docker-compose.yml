@@ -1,9 +1,8 @@
 services:
-  # postgres da aplicacao. o init.sql cria tambem o banco de testes,
-  # assim a suite e2e nunca encosta nos dados de desenvolvimento.
+  # O init.sql cria também o banco de testes, para a suíte e2e nunca encostar
+  # nos dados de desenvolvimento.
   db:
     image: postgres:18-alpine
-    container_name: kpmg-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: kpmg
@@ -12,21 +11,22 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # no postgres 18 o volume vai na raiz, e nao mais em /data como nas versoes antigas
+      # No Postgres 18 o volume fica na raiz, e não mais em /data.
       - db-data:/var/lib/postgresql
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      # o backend so sobe depois que o banco aceita conexao de verdade
+      # Backend e frontend rodam fora do Compose, então este healthcheck serve
+      # ao `docker compose up --wait` e ao `make setup`, que só seguem para as
+      # migrations depois que o banco aceita conexão.
       test: ["CMD-SHELL", "pg_isready -U kpmg -d kpmg"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  # servidor smtp de mentira: captura tudo que a aplicacao envia e mostra
-  # numa caixa de entrada web em http://localhost:8025
+  # Servidor SMTP de desenvolvimento: captura o que a aplicação envia e mostra
+  # numa caixa de entrada em http://localhost:8025.
   mail:
     image: axllent/mailpit:v1.28
-    container_name: kpmg-mail
     restart: unless-stopped
     ports:
       - "1025:1025"

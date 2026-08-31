@@ -10,8 +10,7 @@ interface ConfirmDialogProps {
   onCancel: () => void;
 }
 
-// usa o <dialog> nativo: ele ja prende o foco dentro, escurece o fundo e fecha
-// no esc, coisas que uma div solta obrigaria a reimplementar na mao.
+// O <dialog> nativo já prende o foco, escurece o fundo e fecha no Esc.
 export function ConfirmDialog({
   open,
   title,
@@ -33,8 +32,8 @@ export function ConfirmDialog({
 
     if (open && !dialog.open) {
       dialog.showModal();
-      // abre com o foco no cancelar: a acao destrutiva nao pode ser o
-      // primeiro alvo de quem so apertou enter
+      // Foco inicial no cancelar: a ação destrutiva não pode ser o primeiro
+      // alvo de quem apenas apertou Enter.
       cancelRef.current?.focus();
     }
 
@@ -47,7 +46,7 @@ export function ConfirmDialog({
     <dialog
       ref={dialogRef}
       aria-labelledby="confirm-title"
-      // o esc dispara o cancel do proprio elemento, entao o estado acompanha
+      // O Esc dispara o cancel do próprio elemento, então o estado acompanha.
       onCancel={(event) => {
         event.preventDefault();
         onCancel();

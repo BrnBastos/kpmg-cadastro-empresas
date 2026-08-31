@@ -7,9 +7,14 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { CreateCompanyDto } from './dto/create-company.dto.js';
 import type { UpdateCompanyDto } from './dto/update-company.dto.js';
 
-// codigos do prisma que viram erro de negocio: violacao de unique e registro ausente
 const UNIQUE_VIOLATION = 'P2002';
 const RECORD_NOT_FOUND = 'P2025';
+
+export interface CompanyCreationResult {
+  company: Company;
+  /** O envio é síncrono e best-effort: falhar aqui não invalida o cadastro. */
+  notificationSent: boolean;
+}
 
 @Injectable()
 export class CompaniesService {
@@ -20,7 +25,7 @@ export class CompaniesService {
     private readonly mail: MailService,
   ) {}
 
-  async create(dto: CreateCompanyDto): Promise<Company> {
+  async create(dto: CreateCompanyDto): Promise<CompanyCreationResult> {
     let company: Company;
 
     try {
@@ -29,27 +34,28 @@ export class CompaniesService {
       throw this.translatePrismaError(error, dto.cnpj);
     }
 
-    await this.notifyCreation(company);
-
-    return company;
+    return { company, notificationSent: await this.notifyCreation(company) };
   }
 
-  // o aviso e efeito colateral do cadastro: a empresa ja esta gravada, entao uma
-  // falha no smtp vira log e nao muda a resposta. chamada direta em vez de evento
-  // porque ha um unico interessado, e um barramento so esconderia o fluxo.
-  private async notifyCreation(company: Company): Promise<void> {
+  // A empresa já está gravada quando o aviso sai, então uma falha de SMTP não
+  // pode derrubar o cadastro. O resultado sobe junto para que a tela informe o
+  // que de fato aconteceu, em vez de afirmar que o e-mail foi enviado.
+  private async notifyCreation(company: Company): Promise<boolean> {
     try {
       await this.mail.sendCompanyCreated(company);
+
+      return true;
     } catch (error) {
       this.logger.error(
         `Empresa ${company.id} cadastrada, mas o aviso por e-mail falhou`,
         error instanceof Error ? error.stack : String(error),
       );
+
+      return false;
     }
   }
 
   findAll(): Promise<Company[]> {
-    // mais recentes primeiro: e a ordem que faz sentido numa tela de cadastro
     return this.prisma.company.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
@@ -64,6 +70,14 @@ export class CompaniesService {
   }
 
   async update(id: string, dto: UpdateCompanyDto): Promise<Company> {
+    // Um PATCH sem campos costuma ser erro de quem chamou. Recusar é mais útil
+    // do que devolver o registro intacto como se algo tivesse mudado.
+    if (Object.keys(dto).length === 0) {
+      throw new ApiException(HttpStatus.BAD_REQUEST, {
+        message: 'Informe ao menos um campo para atualizar.',
+      });
+    }
+
     try {
       return await this.prisma.company.update({ where: { id }, data: dto });
     } catch (error) {
@@ -79,9 +93,9 @@ export class CompaniesService {
     }
   }
 
-  // nao existe consulta de "ja existe esse cnpj" antes de gravar de proposito:
-  // entre o select e o insert cabe outra requisicao gravando o mesmo cnpj.
-  // quem garante a unicidade e o indice do banco, e o P2002 e a resposta dele.
+  // Não há consulta de "esse CNPJ já existe" antes de gravar: entre o SELECT e o
+  // INSERT cabe outra requisição com o mesmo CNPJ. Quem garante a unicidade é o
+  // índice do banco, e o P2002 é a resposta dele.
   private translatePrismaError(error: unknown, cnpj?: string): unknown {
     if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
       return error;
@@ -92,7 +106,7 @@ export class CompaniesService {
 
       return new ApiException(HttpStatus.CONFLICT, {
         message: `Já existe uma empresa cadastrada com o CNPJ${formatted}.`,
-        // o front usa isso pra destacar o campo em vez de mostrar um alerta solto
+        // O formulário usa isto para destacar o campo.
         fields: { cnpj: 'Este CNPJ já está cadastrado.' },
       });
     }

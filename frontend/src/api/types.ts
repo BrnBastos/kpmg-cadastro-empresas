@@ -1,11 +1,10 @@
-// espelho dos dtos do backend. escrito a mao de proposito: sao dois projetos
-// separados, e um passo de geracao de tipos custaria mais pra quem for rodar
-// do que este arquivo custa pra manter.
+// Espelha os DTOs do backend. São dois projetos separados, e um passo de
+// geração de tipos custaria mais a quem for rodar do que este arquivo custa.
 
 export interface Company {
   id: string;
   name: string;
-  /** apenas digitos, do jeito que o banco guarda */
+  /** Forma canônica: sem máscara e em maiúsculas. */
   cnpj: string;
   tradeName: string;
   address: string;
@@ -20,7 +19,11 @@ export interface CompanyInput {
   address: string;
 }
 
-// formato unico de erro que a api devolve
+/** Resposta do cadastro, que informa se o aviso por e-mail chegou a sair. */
+export interface CompanyCreated extends Company {
+  notificationSent: boolean;
+}
+
 export interface ApiErrorBody {
   statusCode: number;
   error: string;

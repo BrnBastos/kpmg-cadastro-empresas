@@ -7,8 +7,8 @@ interface TextFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   error?: string;
 }
 
-// junta label, dica e erro num componente so pra nao depender de alguem lembrar
-// de amarrar o htmlFor e o aria-describedby a cada campo novo
+// Mantém htmlFor e aria-describedby amarrados sem depender de quem escreve o
+// próximo campo lembrar disso.
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
   function TextField({ id, label, hint, error, ...inputProps }, ref) {
     const hintId = hint ? `${id}-hint` : undefined;

@@ -6,8 +6,10 @@ import { ApiError } from '../api/client';
 import type { Company } from '../api/types';
 import { Alert } from '../components/Alert';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { TrashIcon } from '../components/icons';
 import { formatCnpj } from '../lib/cnpj';
 import { formatDate, formatTime } from '../lib/date';
+import type { FlashMessage } from './flash';
 
 export function CompanyListPage() {
   const queryClient = useQueryClient();
@@ -16,11 +18,10 @@ export function CompanyListPage() {
   const [toRemove, setToRemove] = useState<Company | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
 
-  // guarda quem abriu o dialogo pra devolver o foco no fechamento
+  // Guarda quem abriu o diálogo para devolver o foco ao fechar.
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
-  // a tela de cadastro manda um recado por aqui ao voltar
-  const flash = (location.state as { message?: string } | null)?.message;
+  const flash = (location.state as { flash?: FlashMessage } | null)?.flash;
 
   const companies = useQuery({
     queryKey: companiesKeys.all,
@@ -47,7 +48,7 @@ export function CompanyListPage() {
 
   function closeDialog() {
     setToRemove(null);
-    // sem isso o foco volta pro body e quem usa teclado se perde na pagina
+    // Sem isto o foco volta para o body e quem usa teclado se perde na página.
     triggerRef.current?.focus();
   }
 
@@ -66,7 +67,7 @@ export function CompanyListPage() {
 
       {flash && (
         <div style={{ marginBottom: 'var(--espaco-4)' }}>
-          <Alert variant="success">{flash}</Alert>
+          <Alert variant={flash.variant}>{flash.text}</Alert>
         </div>
       )}
 
@@ -166,13 +167,14 @@ export function CompanyListPage() {
                         </button>
                         <button
                           type="button"
-                          className="btn btn--ghost"
+                          className="btn btn--ghost btn--ghost-danger"
                           onClick={(event) =>
                             askToRemove(company, event.currentTarget)
                           }
                         >
                           Excluir
                           <span className="sr-only"> {company.name}</span>
+                          <TrashIcon />
                         </button>
                       </div>
                     </td>

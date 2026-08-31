@@ -2,10 +2,10 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 import { IsCnpj } from '../../common/validation/is-cnpj.decorator.js';
-import { stripCnpjMask, trim } from '../../common/validation/transforms.js';
+import { toCanonicalCnpj, trim } from '../../common/validation/transforms.js';
 
 export class CreateCompanyDto {
-  @ApiProperty({ example: 'Padaria Bom Dia LTDA', maxLength: 150 })
+  @ApiProperty({ example: 'Bruno Transportes LTDA', maxLength: 150 })
   @Transform(trim)
   @IsString({ message: 'Informe a razão social.' })
   @IsNotEmpty({ message: 'Informe a razão social.' })
@@ -15,13 +15,16 @@ export class CreateCompanyDto {
 
   @ApiProperty({
     example: '11.222.333/0001-81',
-    description: 'Aceita com ou sem máscara. É armazenado apenas com dígitos.',
+    description:
+      'Aceita os formatos numérico e alfanumérico, com ou sem máscara. ' +
+      'É armazenado sem máscara e em maiúsculas, por exemplo 11222333000181 ' +
+      'ou 00000000E08G12.',
   })
-  @Transform(stripCnpjMask)
+  @Transform(toCanonicalCnpj)
   @IsCnpj()
   cnpj!: string;
 
-  @ApiProperty({ example: 'Padaria Bom Dia', maxLength: 150 })
+  @ApiProperty({ example: 'Bruno Transportes', maxLength: 150 })
   @Transform(trim)
   @IsString({ message: 'Informe o nome fantasia.' })
   @IsNotEmpty({ message: 'Informe o nome fantasia.' })
@@ -29,7 +32,7 @@ export class CreateCompanyDto {
   @MaxLength(150, { message: 'O nome fantasia deve ter no máximo 150 caracteres.' })
   tradeName!: string;
 
-  @ApiProperty({ example: 'Rua das Flores, 123 - Centro, São Paulo/SP', maxLength: 255 })
+  @ApiProperty({ example: 'Rod. Anhanguera, km 78 - Campinas/SP', maxLength: 255 })
   @Transform(trim)
   @IsString({ message: 'Informe o endereço.' })
   @IsNotEmpty({ message: 'Informe o endereço.' })

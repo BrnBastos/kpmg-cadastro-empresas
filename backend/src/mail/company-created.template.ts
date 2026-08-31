@@ -23,8 +23,7 @@ function rows(company: Company): Array<[string, string]> {
   ];
 }
 
-// escapa o que veio do cadastro antes de entrar no html do e-mail.
-// sao dados que um usuario digitou, entao nao vao crus pra dentro da tag.
+// Os valores vêm de campos abertos, então não entram crus no HTML.
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -33,7 +32,7 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-// manda texto e html no mesmo envio: cliente que nao renderiza html cai no texto
+// Texto e HTML no mesmo envio: cliente que não renderiza HTML cai no texto.
 export function buildCompanyCreatedMessage(
   company: Company,
 ): CompanyCreatedMessage {

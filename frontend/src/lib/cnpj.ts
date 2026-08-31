@@ -1,18 +1,30 @@
-// mesma regra do backend. repetida aqui pra pessoa ver o erro enquanto digita,
-// em vez de descobrir so depois de enviar. quem manda no cadastro continua
-// sendo a api.
+// Mesmas regras do backend, repetidas aqui para o erro aparecer enquanto a
+// pessoa digita. A validação da API continua sendo a autoridade final.
 
 const CNPJ_LENGTH = 14;
+const BASE_LENGTH = 12;
+
+const MASK_SEPARATORS = /[.\-/]/g;
+const CANONICAL_FORMAT = /^[0-9A-Z]{12}[0-9]{2}$/;
+
 const FIRST_DIGIT_WEIGHTS = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
 const SECOND_DIGIT_WEIGHTS = [6, ...FIRST_DIGIT_WEIGHTS];
 
-export function onlyDigits(value: string): string {
-  return value.replace(/\D/g, '');
+/** Sem máscara e em maiúsculas, ou `null` se houver caractere fora do formato. */
+export function normalizeCnpj(value: string): string | null {
+  const canonical = value.trim().toUpperCase().replace(MASK_SEPARATORS, '');
+
+  return CANONICAL_FORMAT.test(canonical) ? canonical : null;
+}
+
+// NT COCAD/SUARA/RFB 49/2024: cada caractere vale seu código ASCII menos 48.
+function characterValue(character: string): number {
+  return character.charCodeAt(0) - 48;
 }
 
 function checkDigit(base: string, weights: number[]): number {
   const sum = weights.reduce(
-    (total, weight, index) => total + Number(base[index]) * weight,
+    (total, weight, index) => total + characterValue(base[index]) * weight,
     0,
   );
   const remainder = sum % 11;
@@ -21,39 +33,57 @@ function checkDigit(base: string, weights: number[]): number {
 }
 
 export function isValidCnpj(value: string): boolean {
-  const digits = onlyDigits(value);
+  const canonical = normalizeCnpj(value);
 
-  if (digits.length !== CNPJ_LENGTH || /^(\d)\1+$/.test(digits)) {
+  if (canonical === null || /^(.)\1{13}$/.test(canonical)) {
     return false;
   }
 
-  return (
-    digits[12] === String(checkDigit(digits, FIRST_DIGIT_WEIGHTS)) &&
-    digits[13] === String(checkDigit(digits, SECOND_DIGIT_WEIGHTS))
-  );
+  const base = canonical.slice(0, BASE_LENGTH);
+  const first = checkDigit(base, FIRST_DIGIT_WEIGHTS);
+  const second = checkDigit(`${base}${first}`, SECOND_DIGIT_WEIGHTS);
+
+  return canonical.slice(BASE_LENGTH) === `${first}${second}`;
 }
 
-// 11222333000181 -> 11.222.333/0001-81
 export function formatCnpj(value: string): string {
-  const digits = onlyDigits(value);
+  const canonical = normalizeCnpj(value);
 
-  if (digits.length !== CNPJ_LENGTH) {
+  if (canonical === null) {
     return value;
   }
 
-  return digits.replace(
-    /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/,
-    '$1.$2.$3/$4-$5',
-  );
+  return [
+    canonical.slice(0, 2),
+    '.',
+    canonical.slice(2, 5),
+    '.',
+    canonical.slice(5, 8),
+    '/',
+    canonical.slice(8, 12),
+    '-',
+    canonical.slice(12),
+  ].join('');
 }
 
-// aplica a mascara enquanto a pessoa digita, aceitando valor incompleto
+// Só os separadores conhecidos são retirados. Qualquer outro caractere continua
+// visível no campo, para a validação poder recusá-lo em vez de sumir com ele.
 export function maskCnpj(value: string): string {
-  const digits = onlyDigits(value).slice(0, CNPJ_LENGTH);
+  const raw = value
+    .replace(MASK_SEPARATORS, '')
+    .toUpperCase()
+    .slice(0, CNPJ_LENGTH);
 
-  return digits
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2');
+  const groups: Array<[string, string]> = [
+    ['', raw.slice(0, 2)],
+    ['.', raw.slice(2, 5)],
+    ['.', raw.slice(5, 8)],
+    ['/', raw.slice(8, 12)],
+    ['-', raw.slice(12, 14)],
+  ];
+
+  return groups
+    .filter(([, group]) => group.length > 0)
+    .map(([separator, group]) => `${separator}${group}`)
+    .join('');
 }

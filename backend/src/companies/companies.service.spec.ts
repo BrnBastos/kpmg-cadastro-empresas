@@ -19,10 +19,10 @@ function prismaError(code: string): Prisma.PrismaClientKnownRequestError {
 function companyFixture(overrides: Partial<Company> = {}): Company {
   return {
     id: '3f1c2b9a-4d7e-4a52-9c0b-8e1d6f2a7b34',
-    name: 'Padaria Bom Dia LTDA',
+    name: 'Bruno Transportes LTDA',
     cnpj: '11222333000181',
-    tradeName: 'Padaria Bom Dia',
-    address: 'Rua das Flores, 123 - Centro',
+    tradeName: 'Bruno Transportes',
+    address: 'Rod. Anhanguera, km 78 - Campinas/SP',
     createdAt: new Date('2026-08-28T15:00:00.000Z'),
     updatedAt: new Date('2026-08-28T15:00:00.000Z'),
     ...overrides,
@@ -30,10 +30,10 @@ function companyFixture(overrides: Partial<Company> = {}): Company {
 }
 
 const createDto: CreateCompanyDto = {
-  name: 'Padaria Bom Dia LTDA',
+  name: 'Bruno Transportes LTDA',
   cnpj: '11222333000181',
-  tradeName: 'Padaria Bom Dia',
-  address: 'Rua das Flores, 123 - Centro',
+  tradeName: 'Bruno Transportes',
+  address: 'Rod. Anhanguera, km 78 - Campinas/SP',
 };
 
 describe('CompaniesService', () => {
@@ -77,7 +77,10 @@ describe('CompaniesService', () => {
       const company = companyFixture();
       prisma.company.create.mockResolvedValue(company);
 
-      await expect(service.create(createDto)).resolves.toEqual(company);
+      await expect(service.create(createDto)).resolves.toEqual({
+        company,
+        notificationSent: true,
+      });
       expect(prisma.company.create).toHaveBeenCalledWith({ data: createDto });
     });
 
@@ -88,19 +91,22 @@ describe('CompaniesService', () => {
       await service.create(createDto);
 
       expect(mail.sendCompanyCreated).toHaveBeenCalledTimes(1);
-      // o aviso leva o registro do banco, com id e datas, e nao o dto cru
       expect(mail.sendCompanyCreated).toHaveBeenCalledWith(company);
     });
 
-    // o cadastro ja esta gravado quando o e-mail sai. se o smtp estiver fora,
-    // a resposta continua sendo sucesso.
-    it('conclui o cadastro mesmo quando o envio do e-mail falha', async () => {
+    // A empresa já está gravada quando o e-mail sai: o que muda é o aviso.
+    it('conclui o cadastro e informa que o e-mail não saiu quando o envio falha', async () => {
       const company = companyFixture();
-      const logged = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+      const logged = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => {});
       prisma.company.create.mockResolvedValue(company);
       mail.sendCompanyCreated.mockRejectedValue(new Error('smtp fora do ar'));
 
-      await expect(service.create(createDto)).resolves.toEqual(company);
+      await expect(service.create(createDto)).resolves.toEqual({
+        company,
+        notificationSent: false,
+      });
       expect(logged).toHaveBeenCalledOnce();
 
       logged.mockRestore();
@@ -164,15 +170,15 @@ describe('CompaniesService', () => {
 
   describe('update', () => {
     it('atualiza somente os campos enviados', async () => {
-      const company = companyFixture({ tradeName: 'Padaria 24h' });
+      const company = companyFixture({ tradeName: 'Bruno Transportes Express' });
       prisma.company.update.mockResolvedValue(company);
 
       await expect(
-        service.update(company.id, { tradeName: 'Padaria 24h' }),
+        service.update(company.id, { tradeName: 'Bruno Transportes Express' }),
       ).resolves.toEqual(company);
       expect(prisma.company.update).toHaveBeenCalledWith({
         where: { id: company.id },
-        data: { tradeName: 'Padaria 24h' },
+        data: { tradeName: 'Bruno Transportes Express' },
       });
     });
 
@@ -196,8 +202,7 @@ describe('CompaniesService', () => {
       expect((error as ApiException).getStatus()).toBe(HttpStatus.CONFLICT);
     });
 
-    // atualizar nao e cadastrar: o aviso e so do cadastro
-    it('nao dispara e-mail na atualizacao', async () => {
+    it('não dispara e-mail na atualização', async () => {
       prisma.company.update.mockResolvedValue(companyFixture());
 
       await service.update('id', { tradeName: 'x' });

@@ -6,8 +6,8 @@ import { CompanyListPage } from './pages/CompanyListPage';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // cadastro de empresa muda pouco; refazer a busca a cada foco na janela
-      // so gera requisicao sem motivo
+      // O cadastro muda pouco; refazer a busca a cada foco na janela só gera
+      // requisição sem motivo.
       refetchOnWindowFocus: false,
       retry: 1,
     },

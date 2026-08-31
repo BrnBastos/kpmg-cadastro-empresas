@@ -13,6 +13,8 @@
   --erro-fundo: #fdecea;
   --sucesso: #0f7b40;
   --sucesso-fundo: #e7f5ed;
+  --aviso: #8a5300;
+  --aviso-fundo: #fdf3e2;
 
   --raio: 8px;
   --sombra: 0 1px 2px rgb(16 24 40 / 6%), 0 1px 3px rgb(16 24 40 / 10%);
@@ -171,6 +173,17 @@ p {
 .btn--ghost:hover:not(:disabled) {
   background: var(--azul-claro);
   color: var(--azul);
+}
+
+/* acao destrutiva avisa pela cor antes do clique, e nao so no dialogo */
+.btn--ghost-danger:hover:not(:disabled) {
+  background: var(--erro-fundo);
+  color: var(--erro);
+}
+
+/* icone e texto juntos precisam de menos respiro que dois textos */
+.btn--ghost {
+  gap: 6px;
 }
 
 /* ---------- tabela ---------- */
@@ -338,6 +351,12 @@ tbody tr:hover {
   background: var(--sucesso-fundo);
   border-color: #bfe3ce;
   color: var(--sucesso);
+}
+
+.alert--warning {
+  background: var(--aviso-fundo);
+  border-color: #f0d9a8;
+  color: var(--aviso);
 }
 
 .state {

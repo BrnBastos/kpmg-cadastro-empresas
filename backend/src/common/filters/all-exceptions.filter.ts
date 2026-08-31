@@ -26,8 +26,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const body = this.toApiError(exception, request.url);
 
-    // erro nao previsto e problema nosso: registra o stack inteiro no log,
-    // mas devolve uma mensagem generica pra nao vazar detalhe interno.
+    // Erro não previsto vai inteiro para o log, mas a resposta é genérica para
+    // não vazar detalhe interno.
     if (body.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR) {
       this.logger.error(
         `${request.method} ${request.url} falhou`,
@@ -60,7 +60,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return {
         statusCode,
         error: this.labelFor(statusCode),
-        // o nest devolve array quando a excecao vem sem payload proprio
+        // O Nest devolve array quando a exceção vem sem payload próprio.
         message: Array.isArray(message)
           ? message.join(' ')
           : (message ?? this.labelFor(statusCode)),
@@ -79,8 +79,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     };
   }
 
-  // "error" e o rotulo tecnico do status, entao fica em ingles como manda o http.
-  // o texto que a pessoa le e o "message", esse sim em pt-br.
+  // "error" é o rótulo técnico do status HTTP, por isso em inglês. O texto que a
+  // pessoa lê é o "message".
   private labelFor(statusCode: number): string {
     const name = HttpStatus[statusCode] as string | undefined;
 

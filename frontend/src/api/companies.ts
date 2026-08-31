@@ -1,5 +1,5 @@
 import { request } from './client';
-import type { Company, CompanyInput } from './types';
+import type { Company, CompanyCreated, CompanyInput } from './types';
 
 export const companiesKeys = {
   all: ['companies'] as const,
@@ -14,8 +14,8 @@ export function getCompany(id: string): Promise<Company> {
   return request<Company>(`/companies/${id}`);
 }
 
-export function createCompany(input: CompanyInput): Promise<Company> {
-  return request<Company>('/companies', {
+export function createCompany(input: CompanyInput): Promise<CompanyCreated> {
+  return request<CompanyCreated>('/companies', {
     method: 'POST',
     body: JSON.stringify(input),
   });
